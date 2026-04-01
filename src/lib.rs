@@ -13,14 +13,18 @@ pub struct Position {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GameEvent {
+    /// First message sent by a client after connecting, to register their chosen name.
+    RegisterEvent { name: String },
     /// A client said something at a position.
-    SayEvent { position: Position, text: String },
+    SayEvent { position: Option<Position>, text: String },
     /// Sent by the server to a newly connected client to assign its ID and starting position.
     HelloEvent { your_id: u64, start_position: Position },
-    /// Sent by the server immediately after HelloEvent with all currently connected players.
-    WorldStateEvent { boats: Vec<(u64, Position)> },
+    /// Sent by the server immediately after HelloEvent with all currently connected players (id, position, name).
+    WorldStateEvent { boats: Vec<(u64, Position, String)> },
     /// Broadcast whenever a client moves.
     MoveEvent { id: u64, position: Position },
+    /// Broadcast by the server when a new client joins, so existing clients learn their name.
+    NameEvent { id: u64, name: String },
     /// Broadcast by the server when a client disconnects.
     ByeEvent { id: u64 },
 }

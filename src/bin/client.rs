@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use black_sea::{GameEvent, Position, recv_event, send_event};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout};
-use ratatui::style::{Color, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::canvas::{Canvas, Context};
 use ratatui::widgets::{Block, Paragraph};
@@ -18,10 +18,55 @@ const GRID_SIZE: f64 = 100.0;
 const CURSOR_STEP: f32 = 1.0;
 const BUBBLE_TTL: Duration = Duration::from_secs(5);
 const BUBBLE_OFFSET: f32 = 3.0;
-const OWN_BOAT: &str = "@";
-const REMOTE_BOAT: &str = "^";
 
-// ── App state ────────────────────────────────────────────────────────────────
+// ── Direction ─────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Copy, PartialEq)]
+enum Direction {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
+impl Default for Direction {
+    fn default() -> Self {
+        Direction::Right
+    }
+}
+
+/// Build the boat glyph string from a name and the last movement direction.
+/// Horizontal: /Name/ or \Name\  — name visible on the broadside.
+/// Vertical: ^ or v              — name hidden, bow/stern facing viewer.
+/// Returns a list of `(x_offset, y_offset, text)` tuples to print relative to the boat's position.
+/// Horizontal boats have a sail row above the hull; vertical boats stack three rows.
+fn boat_glyphs(name: &str, dir: Direction) -> Vec<(f64, f64, String)> {
+    match dir {
+        Direction::Right => {
+            let hull = format!("/{}/", name);
+            // Sail centered over hull: hull is name.len()+2 wide, sail "\|)" is 3 wide.
+            let sail_x = ((hull.len() as f64 - 3.0) / 2.0).max(0.0);
+            vec![(0.0, 0.0, hull), (sail_x, 1.0, "/|)".to_string())]
+        }
+        Direction::Left => {
+            let hull = format!("\\{}\\", name);
+            let sail_x = ((hull.len() as f64 - 3.0) / 2.0).max(0.0);
+            vec![(0.0, 0.0, hull), (sail_x, 1.0, "(|\\".to_string())]
+        }
+        Direction::Up => vec![
+            (0.0, 0.0, "||".to_string()),
+            (0.0, 1.0, "||".to_string()),
+            (0.0, 2.0, "/\\".to_string()),
+        ],
+        Direction::Down => vec![
+            (0.0, 0.0, "\\/".to_string()),
+            (0.0, 1.0, "||".to_string()),
+            (0.0, 2.0, "||".to_string()),
+        ],
+    }
+}
+
+// ── App state ─────────────────────────────────────────────────────────────────
 
 struct Bubble {
     position: Position,
@@ -29,19 +74,29 @@ struct Bubble {
     received_at: Instant,
 }
 
+struct RemoteBoat {
+    position: Position,
+    name: String,
+    last_dir: Direction,
+}
+
 struct App {
     my_id: Option<u64>,
+    my_name: String,
     cursor: Position,
+    last_dir: Direction,
     input: String,
     bubbles: Vec<Bubble>,
-    remote_boats: HashMap<u64, Position>,
+    remote_boats: HashMap<u64, RemoteBoat>,
 }
 
 impl App {
-    fn new() -> Self {
+    fn new(name: String) -> Self {
         Self {
             my_id: None,
+            my_name: name,
             cursor: Position { x: 50.0, y: 50.0 },
+            last_dir: Direction::Right,
             input: String::new(),
             bubbles: Vec::new(),
             remote_boats: HashMap::new(),
@@ -51,6 +106,12 @@ impl App {
     fn move_cursor(&mut self, dx: f32, dy: f32) {
         self.cursor.x = (self.cursor.x + dx).clamp(0.0, 99.0);
         self.cursor.y = (self.cursor.y + dy).clamp(0.0, 99.0);
+        self.last_dir = match (dx, dy) {
+            (x, _) if x > 0.0 => Direction::Right,
+            (x, _) if x < 0.0 => Direction::Left,
+            (_, y) if y > 0.0 => Direction::Up,
+            _ => Direction::Down,
+        };
     }
 
     fn push_bubble(&mut self, position: Position, text: String) {
@@ -74,6 +135,75 @@ enum AppMsg {
     Tick,
 }
 
+// ── Name-entry screen ─────────────────────────────────────────────────────────
+
+/// Show a simple TUI name-entry screen and return the name the player types.
+async fn prompt_name(terminal: &mut ratatui::DefaultTerminal) -> Result<String> {
+    let mut name = String::new();
+    loop {
+        terminal.draw(|frame| render_name_screen(frame, &name))?;
+
+        // Block until a key event (poll with short timeout for responsiveness)
+        if event::poll(Duration::from_millis(50))? {
+            if let Event::Key(key) = event::read()? {
+                if key.kind != KeyEventKind::Press {
+                    continue;
+                }
+                match key.code {
+                    KeyCode::Enter if !name.is_empty() => return Ok(name),
+                    KeyCode::Backspace => {
+                        name.pop();
+                    }
+                    KeyCode::Char(c) => {
+                        // Cap name length to keep glyphs readable
+                        if name.len() < 16 {
+                            name.push(c);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+fn render_name_screen(frame: &mut Frame, name: &str) {
+    let area = frame.area();
+    let [_, center, _] = Layout::vertical([
+        Constraint::Percentage(40),
+        Constraint::Length(5),
+        Constraint::Min(0),
+    ])
+    .areas(area);
+
+    let preview = if name.is_empty() {
+        "type your name…".to_string()
+    } else {
+        format!("/{}/", name)
+    };
+
+    let content = vec![
+        Line::from(Span::styled(
+            "Welcome to Black Sea",
+            Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("> ", Style::new().fg(Color::Yellow).bold()),
+            Span::raw(name),
+            Span::styled("_", Style::new().fg(Color::DarkGray)),
+        ]),
+        Line::from(Span::styled(
+            format!("  your boat: {}", preview),
+            Style::new().fg(Color::DarkGray),
+        )),
+    ];
+
+    let widget = Paragraph::new(content)
+        .block(Block::bordered().title("Enter your boat name (Enter to sail)"));
+    frame.render_widget(widget, center);
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 #[tokio::main]
@@ -82,23 +212,42 @@ async fn main() -> Result<()> {
         .install_default()
         .expect("Failed to install rustls crypto provider");
 
-    let server_url = std::env::var("BLACK_SEA_SERVER")
-        .unwrap_or_else(|_| {
-            option_env!("BLACK_SEA_SERVER_DEFAULT")
-                .unwrap_or("ws://127.0.0.1:7456")
-                .to_string()
-        });
+    let server_url = std::env::var("BLACK_SEA_SERVER").unwrap_or_else(|_| {
+        option_env!("BLACK_SEA_SERVER_DEFAULT")
+            .unwrap_or("ws://127.0.0.1:7456")
+            .to_string()
+    });
+
+    let mut terminal = ratatui::init();
+
+    // Ask for a name before connecting.
+    let name = match prompt_name(&mut terminal).await {
+        Ok(n) => n,
+        Err(e) => {
+            ratatui::restore();
+            return Err(e);
+        }
+    };
+
     let request = server_url.into_client_request()?;
     let (mut ws, _) = connect_async(request).await?;
 
-    let mut terminal = ratatui::init();
-    let result = run(&mut terminal, &mut ws).await;
+    // Register name with server immediately.
+    send_event(&mut ws, &GameEvent::RegisterEvent { name: name.clone() }).await?;
+
+    let result = run(&mut terminal, &mut ws, name).await;
     ratatui::restore();
     result
 }
 
-async fn run(terminal: &mut ratatui::DefaultTerminal, ws: &mut tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>) -> Result<()> {
-    let mut app = App::new();
+async fn run(
+    terminal: &mut ratatui::DefaultTerminal,
+    ws: &mut tokio_tungstenite::WebSocketStream<
+        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    >,
+    name: String,
+) -> Result<()> {
+    let mut app = App::new(name);
     let (tx, mut rx) = mpsc::channel::<AppMsg>(64);
 
     // Spawn a task that reads keyboard / terminal events and forwards them.
@@ -151,11 +300,14 @@ async fn run(terminal: &mut ratatui::DefaultTerminal, ws: &mut tokio_tungstenite
                             KeyCode::Backspace => { app.input.pop(); }
                             KeyCode::Enter => {
                                 if !app.input.is_empty() {
+                                    let text: String = app.input.drain(..).collect();
                                     let event = GameEvent::SayEvent {
-                                        position: app.cursor.clone(),
-                                        text: app.input.drain(..).collect(),
+                                        position: None,
+                                        text: text.clone(),
                                     };
                                     send_event(ws, &event).await?;
+                                    // Show the bubble locally — the server won't echo it back to us.
+                                    app.push_bubble(app.cursor.clone(), text);
                                 }
                             }
                             KeyCode::Char(c) => app.input.push(c),
@@ -174,19 +326,54 @@ async fn run(terminal: &mut ratatui::DefaultTerminal, ws: &mut tokio_tungstenite
                         app.cursor = start_position;
                     }
                     Some(GameEvent::WorldStateEvent { boats }) => {
-                        for (id, position) in boats {
-                            app.remote_boats.insert(id, position);
+                        for (id, position, name) in boats {
+                            app.remote_boats.insert(id, RemoteBoat {
+                                position,
+                                name,
+                                last_dir: Direction::Right,
+                            });
                         }
                     }
+                    Some(GameEvent::NameEvent { id, name }) => {
+                        // A new player just connected — add them with a default position
+                        // (a MoveEvent will follow with their real position shortly, but
+                        // we want their name ready).
+                        app.remote_boats.entry(id).and_modify(|b| b.name = name.clone()).or_insert(RemoteBoat {
+                            position: Position { x: 0.0, y: 0.0 },
+                            name,
+                            last_dir: Direction::Right,
+                        });
+                    }
                     Some(GameEvent::MoveEvent { id, position }) => {
-                        app.remote_boats.insert(id, position);
+                        if let Some(boat) = app.remote_boats.get_mut(&id) {
+                            // Derive direction from position delta before updating
+                            let dx = position.x - boat.position.x;
+                            let dy = position.y - boat.position.y;
+                            if dx.abs() > 0.0 || dy.abs() > 0.0 {
+                                boat.last_dir = if dx.abs() >= dy.abs() {
+                                    if dx > 0.0 { Direction::Right } else { Direction::Left }
+                                } else {
+                                    if dy > 0.0 { Direction::Up } else { Direction::Down }
+                                };
+                            }
+                            boat.position = position;
+                        } else {
+                            // Boat not yet in map (NameEvent may not have arrived yet)
+                            app.remote_boats.insert(id, RemoteBoat {
+                                position,
+                                name: id.to_string(),
+                                last_dir: Direction::Right,
+                            });
+                        }
                     }
                     Some(GameEvent::ByeEvent { id }) => {
                         app.remote_boats.remove(&id);
                     }
                     Some(GameEvent::SayEvent { position, text }) => {
-                        app.push_bubble(position, text);
+                        app.push_bubble(position.unwrap_or_else(|| app.cursor.clone()), text);
                     }
+                    // Server should never send these to a client
+                    Some(GameEvent::RegisterEvent { .. }) => {}
                     None => break,
                 }
             }
@@ -197,11 +384,19 @@ async fn run(terminal: &mut ratatui::DefaultTerminal, ws: &mut tokio_tungstenite
 }
 
 /// Send a MoveEvent with the current cursor position.
-async fn send_move(ws: &mut tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>, app: &App) -> Result<()> {
+async fn send_move(
+    ws: &mut tokio_tungstenite::WebSocketStream<
+        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    >,
+    app: &App,
+) -> Result<()> {
+    let Some(id) = app.my_id else {
+        return Ok(());
+    };
     send_event(
         ws,
         &GameEvent::MoveEvent {
-            id: app.my_id.unwrap_or(0),
+            id,
             position: app.cursor.clone(),
         },
     )
@@ -227,27 +422,35 @@ fn render(frame: &mut Frame, app: &App) {
     let bubbles = &app.bubbles;
     let cursor = &app.cursor;
     let remote_boats = &app.remote_boats;
+    let own_glyphs = boat_glyphs(&app.my_name, app.last_dir);
 
     let canvas = Canvas::default()
         .block(Block::bordered().title("World"))
         .x_bounds([0.0, GRID_SIZE])
         .y_bounds([0.0, GRID_SIZE])
         .paint(|ctx: &mut Context| {
-            // Draw remote boats in cyan
-            for position in remote_boats.values() {
-                ctx.print(
-                    position.x as f64,
-                    position.y as f64,
-                    Span::styled(REMOTE_BOAT, Style::new().fg(Color::Cyan)),
-                );
+            // Draw remote boats in cyan — name embedded in the hull glyph
+            for boat in remote_boats.values() {
+                for (x_off, y_off, glyph) in boat_glyphs(&boat.name, boat.last_dir) {
+                    ctx.print(
+                        boat.position.x as f64 + x_off,
+                        boat.position.y as f64 + y_off,
+                        Span::styled(glyph, Style::new().fg(Color::Cyan)),
+                    );
+                }
             }
 
             // Draw own boat in yellow (on top)
-            ctx.print(
-                cursor.x as f64,
-                cursor.y as f64,
-                Span::styled(OWN_BOAT, Style::new().fg(Color::Yellow)),
-            );
+            for (x_off, y_off, glyph) in &own_glyphs {
+                ctx.print(
+                    cursor.x as f64 + x_off,
+                    cursor.y as f64 + y_off,
+                    Span::styled(
+                        glyph.clone(),
+                        Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                    ),
+                );
+            }
 
             // Draw speech bubbles
             for bubble in bubbles {
