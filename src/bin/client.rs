@@ -78,6 +78,10 @@ enum AppMsg {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     let server_url = std::env::var("BLACK_SEA_SERVER")
         .unwrap_or_else(|_| {
             option_env!("BLACK_SEA_SERVER_DEFAULT")
