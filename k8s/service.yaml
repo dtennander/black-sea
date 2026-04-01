@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: black-sea-service
+  labels:
+    app: black-sea-server
+spec:
+  type: ClusterIP
+  selector:
+    app: black-sea-server
+  ports:
+    - port: 80
+      targetPort: 7456
+      protocol: TCP
+      name: http

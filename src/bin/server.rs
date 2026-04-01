@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
-use mmo_term::{recv_event, send_event, GameEvent, Position};
+use black_sea::{recv_event, send_event, GameEvent, Position};
 use rand::Rng;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::net::{TcpListener, TcpStream};

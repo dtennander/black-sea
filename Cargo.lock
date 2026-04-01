@@ -81,6 +81,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "843867be96c8daad0d758b57df9392b6d8d271134fce549de6ce169ff98a92af"
 
 [[package]]
+name = "black-sea"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "crossterm",
+ "futures-util",
+ "rand 0.9.2",
+ "ratatui",
+ "serde",
+ "tokio",
+ "tokio-tungstenite",
+]
+
+[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -762,21 +777,6 @@ dependencies = [
  "log",
  "wasi",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "mmo-term"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bincode",
- "crossterm",
- "futures-util",
- "rand 0.9.2",
- "ratatui",
- "serde",
- "tokio",
- "tokio-tungstenite",
 ]
 
 [[package]]

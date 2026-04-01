@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-use mmo_term::{GameEvent, Position, recv_event, send_event};
+use black_sea::{GameEvent, Position, recv_event, send_event};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Color, Style};
@@ -78,7 +78,7 @@ enum AppMsg {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let server_url = std::env::var("MMO_SERVER")
+    let server_url = std::env::var("BLACK_SEA_SERVER")
         .unwrap_or_else(|_| "ws://127.0.0.1:7456".to_string());
     let request = server_url.into_client_request()?;
     let (mut ws, _) = connect_async(request).await?;

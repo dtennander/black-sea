@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: black-sea-server
+  labels:
+    app: black-sea-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: black-sea-server
+  template:
+    metadata:
+      labels:
+        app: black-sea-server
+    spec:
+      imagePullSecrets:
+        - name: github-image-pull
+      containers:
+        - name: black-sea-server
+          image: ghcr.io/dtennander/black-sea
+          ports:
+            - containerPort: 7456
