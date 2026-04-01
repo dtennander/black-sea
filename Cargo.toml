@@ -5,6 +5,8 @@ edition = "2024"
 
 [dependencies]
 tokio = { version = "1.50.0", features = ["full"] }
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+futures-util = "0.3"
 anyhow = "1.0.102"
 serde = { version = "1", features = ["derive"] }
 bincode = "1"

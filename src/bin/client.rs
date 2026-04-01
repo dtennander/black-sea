@@ -10,8 +10,9 @@ use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::canvas::{Canvas, Context};
 use ratatui::widgets::{Block, Paragraph};
-use tokio::net::TcpStream;
 use tokio::sync::mpsc;
+use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
 const GRID_SIZE: f64 = 100.0;
 const CURSOR_STEP: f32 = 1.0;
@@ -77,15 +78,18 @@ enum AppMsg {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut stream = TcpStream::connect("127.0.0.1:7456").await?;
+    let server_url = std::env::var("MMO_SERVER")
+        .unwrap_or_else(|_| "ws://127.0.0.1:7456".to_string());
+    let request = server_url.into_client_request()?;
+    let (mut ws, _) = connect_async(request).await?;
 
     let mut terminal = ratatui::init();
-    let result = run(&mut terminal, &mut stream).await;
+    let result = run(&mut terminal, &mut ws).await;
     ratatui::restore();
     result
 }
 
-async fn run(terminal: &mut ratatui::DefaultTerminal, stream: &mut TcpStream) -> Result<()> {
+async fn run(terminal: &mut ratatui::DefaultTerminal, ws: &mut tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>) -> Result<()> {
     let mut app = App::new();
     let (tx, mut rx) = mpsc::channel::<AppMsg>(64);
 
@@ -122,19 +126,19 @@ async fn run(terminal: &mut ratatui::DefaultTerminal, stream: &mut TcpStream) ->
                             KeyCode::Esc | KeyCode::Char('q') => break,
                             KeyCode::Up    => {
                                 app.move_cursor(0.0, CURSOR_STEP);
-                                send_move(stream, &app).await?;
+                                send_move(ws, &app).await?;
                             }
                             KeyCode::Down  => {
                                 app.move_cursor(0.0, -CURSOR_STEP);
-                                send_move(stream, &app).await?;
+                                send_move(ws, &app).await?;
                             }
                             KeyCode::Left  => {
                                 app.move_cursor(-CURSOR_STEP, 0.0);
-                                send_move(stream, &app).await?;
+                                send_move(ws, &app).await?;
                             }
                             KeyCode::Right => {
                                 app.move_cursor(CURSOR_STEP, 0.0);
-                                send_move(stream, &app).await?;
+                                send_move(ws, &app).await?;
                             }
                             KeyCode::Backspace => { app.input.pop(); }
                             KeyCode::Enter => {
@@ -143,7 +147,7 @@ async fn run(terminal: &mut ratatui::DefaultTerminal, stream: &mut TcpStream) ->
                                         position: app.cursor.clone(),
                                         text: app.input.drain(..).collect(),
                                     };
-                                    send_event(stream, &event).await?;
+                                    send_event(ws, &event).await?;
                                 }
                             }
                             KeyCode::Char(c) => app.input.push(c),
@@ -155,7 +159,7 @@ async fn run(terminal: &mut ratatui::DefaultTerminal, stream: &mut TcpStream) ->
                 }
             }
 
-            result = recv_event(stream) => {
+            result = recv_event(ws) => {
                 match result? {
                     Some(GameEvent::HelloEvent { your_id, start_position }) => {
                         app.my_id = Some(your_id);
@@ -185,9 +189,9 @@ async fn run(terminal: &mut ratatui::DefaultTerminal, stream: &mut TcpStream) ->
 }
 
 /// Send a MoveEvent with the current cursor position.
-async fn send_move(stream: &mut TcpStream, app: &App) -> Result<()> {
+async fn send_move(ws: &mut tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>, app: &App) -> Result<()> {
     send_event(
-        stream,
+        ws,
         &GameEvent::MoveEvent {
             id: app.my_id.unwrap_or(0),
             position: app.cursor.clone(),

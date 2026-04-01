@@ -1,7 +1,9 @@
 use anyhow::{Context, Result};
+use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
+use tokio::io::{AsyncRead, AsyncWrite};
+use tokio_tungstenite::WebSocketStream;
+use tokio_tungstenite::tungstenite::Message;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Position {
@@ -23,41 +25,36 @@ pub enum GameEvent {
     ByeEvent { id: u64 },
 }
 
-/// Serialize and send a `GameEvent` over `stream`.
-///
-/// Framing: 4-byte big-endian length prefix followed by the bincode payload.
-pub async fn send_event(stream: &mut TcpStream, event: &GameEvent) -> Result<()> {
+/// Serialize and send a `GameEvent` over a WebSocket stream.
+pub async fn send_event<S>(ws: &mut WebSocketStream<S>, event: &GameEvent) -> Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
     let payload = bincode::serialize(event).context("failed to serialize event")?;
-    let len = payload.len() as u32;
-    stream
-        .write_all(&len.to_be_bytes())
+    ws.send(Message::Binary(payload.into()))
         .await
-        .context("failed to write length prefix")?;
-    stream
-        .write_all(&payload)
-        .await
-        .context("failed to write event payload")?;
+        .context("failed to send WebSocket message")?;
     Ok(())
 }
 
-/// Read and deserialize the next `GameEvent` from `stream`.
+/// Read and deserialize the next `GameEvent` from a WebSocket stream.
 ///
-/// Returns `None` if the connection was closed cleanly (EOF on length header).
-pub async fn recv_event(stream: &mut TcpStream) -> Result<Option<GameEvent>> {
-    let mut len_buf = [0u8; 4];
-    match stream.read_exact(&mut len_buf).await {
-        Ok(_) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(None),
-        Err(e) => return Err(e).context("failed to read length prefix"),
+/// Returns `None` if the connection was closed cleanly.
+pub async fn recv_event<S>(ws: &mut WebSocketStream<S>) -> Result<Option<GameEvent>>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    loop {
+        match ws.next().await {
+            None => return Ok(None),
+            Some(Err(e)) => return Err(e).context("WebSocket receive error"),
+            Some(Ok(Message::Binary(payload))) => {
+                let event: GameEvent =
+                    bincode::deserialize(&payload).context("failed to deserialize event")?;
+                return Ok(Some(event));
+            }
+            Some(Ok(Message::Close(_))) => return Ok(None),
+            Some(Ok(_)) => continue, // skip Ping, Pong, Text
+        }
     }
-    let len = u32::from_be_bytes(len_buf) as usize;
-
-    let mut payload = vec![0u8; len];
-    stream
-        .read_exact(&mut payload)
-        .await
-        .context("failed to read event payload")?;
-
-    let event: GameEvent = bincode::deserialize(&payload).context("failed to deserialize event")?;
-    Ok(Some(event))
 }

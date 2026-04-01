@@ -7,6 +7,8 @@ use rand::Rng;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::broadcast;
+use tokio_tungstenite::accept_async;
+use tokio_tungstenite::WebSocketStream;
 
 const GRID_SIZE: f32 = 100.0;
 const MIN_SEPARATION: f32 = 5.0;
@@ -36,8 +38,13 @@ async fn main() -> Result<()> {
         let rx = tx.subscribe();
         let positions = Arc::clone(&positions);
         tokio::spawn(async move {
-            if let Err(e) = handle(socket, tx, rx, positions).await {
-                eprintln!("Error handling connection from {addr}: {e}");
+            match accept_async(socket).await {
+                Ok(ws) => {
+                    if let Err(e) = handle(ws, tx, rx, positions).await {
+                        eprintln!("Error handling connection from {addr}: {e}");
+                    }
+                }
+                Err(e) => eprintln!("WebSocket handshake failed from {addr}: {e}"),
             }
         });
     }
@@ -64,7 +71,7 @@ fn find_free_position(positions: &HashMap<u64, Position>) -> Position {
 }
 
 async fn handle(
-    mut stream: TcpStream,
+    mut ws: WebSocketStream<TcpStream>,
     tx: broadcast::Sender<Envelope>,
     mut rx: broadcast::Receiver<Envelope>,
     positions: PositionMap,
@@ -79,7 +86,7 @@ async fn handle(
         pos
     };
     send_event(
-        &mut stream,
+        &mut ws,
         &GameEvent::HelloEvent {
             your_id: self_id,
             start_position,
@@ -95,12 +102,12 @@ async fn handle(
         .filter(|(id, _)| **id != self_id)
         .map(|(id, pos)| (*id, pos.clone()))
         .collect();
-    send_event(&mut stream, &GameEvent::WorldStateEvent { boats: snapshot }).await?;
+    send_event(&mut ws, &GameEvent::WorldStateEvent { boats: snapshot }).await?;
 
     loop {
         tokio::select! {
             // Incoming event from this client -> broadcast to all others
-            result = recv_event(&mut stream) => {
+            result = recv_event(&mut ws) => {
                 match result? {
                     Some(event) => {
                         let broadcast_event = match event {
@@ -131,7 +138,7 @@ async fn handle(
             result = rx.recv() => {
                 match result {
                     Ok(envelope) if envelope.sender_id != self_id => {
-                        send_event(&mut stream, &envelope.event).await?;
+                        send_event(&mut ws, &envelope.event).await?;
                     }
                     Ok(_) => {} // skip own events
                     Err(broadcast::error::RecvError::Lagged(n)) => {
