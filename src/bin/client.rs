@@ -79,7 +79,11 @@ enum AppMsg {
 #[tokio::main]
 async fn main() -> Result<()> {
     let server_url = std::env::var("BLACK_SEA_SERVER")
-        .unwrap_or_else(|_| "ws://127.0.0.1:7456".to_string());
+        .unwrap_or_else(|_| {
+            option_env!("BLACK_SEA_SERVER_DEFAULT")
+                .unwrap_or("ws://127.0.0.1:7456")
+                .to_string()
+        });
     let request = server_url.into_client_request()?;
     let (mut ws, _) = connect_async(request).await?;
 
