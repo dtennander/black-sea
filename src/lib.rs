@@ -11,7 +11,16 @@ pub struct Position {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GameEvent {
+    /// A client said something at a position.
     SayEvent { position: Position, text: String },
+    /// Sent by the server to a newly connected client to assign its ID and starting position.
+    HelloEvent { your_id: u64, start_position: Position },
+    /// Sent by the server immediately after HelloEvent with all currently connected players.
+    WorldStateEvent { boats: Vec<(u64, Position)> },
+    /// Broadcast whenever a client moves.
+    MoveEvent { id: u64, position: Position },
+    /// Broadcast by the server when a client disconnects.
+    ByeEvent { id: u64 },
 }
 
 /// Serialize and send a `GameEvent` over `stream`.
