@@ -40,30 +40,35 @@ impl Default for Direction {
 /// Vertical: ^ or v              — name hidden, bow/stern facing viewer.
 /// Returns a list of `(x_offset, y_offset, text)` tuples to print relative to the boat's position.
 /// Horizontal boats have a sail row above the hull; vertical boats stack three rows.
-/// `row_step` is the number of logical units that equals exactly one terminal row, so that
-/// multi-row boats always land on distinct cells regardless of terminal height.
-fn boat_glyphs(name: &str, dir: Direction, row_step: f64) -> Vec<(f64, f64, String)> {
+/// `row_step` is the number of logical units that equals exactly one terminal row.
+/// `col_step` is the number of logical units that equals exactly one terminal column.
+fn boat_glyphs(
+    name: &str,
+    dir: Direction,
+    row_step: f64,
+    col_step: f64,
+) -> Vec<(f64, f64, String)> {
     match dir {
         Direction::Right => {
             let hull = format!("/{}/", name);
-            // Sail centered over hull: hull is name.len()+2 wide, sail "\|)" is 3 wide.
-            let sail_x = ((hull.len() as f64 - 3.0) / 2.0).max(0.0);
+            // Centre the 3-char sail over the hull in logical units.
+            let sail_x = ((hull.len() as f64 - 3.0) / 2.0).max(0.0) * col_step;
             vec![(0.0, 0.0, hull), (sail_x, row_step, "/|)".to_string())]
         }
         Direction::Left => {
             let hull = format!("\\{}\\", name);
-            let sail_x = ((hull.len() as f64 - 3.0) / 2.0).max(0.0);
+            let sail_x = ((hull.len() as f64 - 3.0) / 2.0).max(0.0) * col_step;
             vec![(0.0, 0.0, hull), (sail_x, row_step, "(|\\".to_string())]
         }
         Direction::Up => vec![
-            (0.0, 0.0, "||".to_string()),
-            (0.0, row_step, "||".to_string()),
-            (0.0, row_step * 2.0, "/\\".to_string()),
+            (col_step * 2.0, row_step * 2.0, "^".to_string()),
+            (col_step, row_step, "/|\\".to_string()),
+            (col_step, 0.0, "\\ /".to_string()),
         ],
         Direction::Down => vec![
-            (0.0, 0.0, "\\/".to_string()),
-            (0.0, row_step, "||".to_string()),
-            (0.0, row_step * 2.0, "||".to_string()),
+            (col_step, row_step, "/ \\".to_string()),
+            (col_step, 0., "\\|/".to_string()),
+            (col_step * 2.0, -row_step, "V".to_string()),
         ],
     }
 }
@@ -428,14 +433,20 @@ fn render(frame: &mut Frame, app: &App) {
     // Compute how many logical units correspond to exactly one terminal row/col.
     // The canvas inner area subtracts 2 for the border on each axis.
     let inner_h = (world_area.height.saturating_sub(2)) as f64;
+    let inner_w = (world_area.width.saturating_sub(2)) as f64;
     let row_step = if inner_h > 1.0 {
         GRID_SIZE / (inner_h - 1.0)
     } else {
         1.0
     };
+    let col_step = if inner_w > 1.0 {
+        GRID_SIZE / (inner_w - 1.0)
+    } else {
+        1.0
+    };
 
-    // For vertical boats (3 rows tall), clamp the base y so all rows stay in-bounds.
-    let v_margin = row_step * 2.0;
+    // For vertical boats (4 rows tall), clamp the base y so all rows stay in-bounds.
+    let v_margin = row_step * 3.0;
     let clamp_y = |y: f32, dir: Direction| -> f64 {
         match dir {
             Direction::Up | Direction::Down => (y as f64).clamp(0.0, GRID_SIZE - v_margin),
@@ -443,7 +454,7 @@ fn render(frame: &mut Frame, app: &App) {
         }
     };
 
-    let own_glyphs = boat_glyphs(&app.my_name, app.last_dir, row_step);
+    let own_glyphs = boat_glyphs(&app.my_name, app.last_dir, row_step, col_step);
 
     let canvas = Canvas::default()
         .block(Block::bordered().title("World"))
@@ -453,7 +464,9 @@ fn render(frame: &mut Frame, app: &App) {
             // Draw remote boats in cyan — name embedded in the hull glyph
             for boat in remote_boats.values() {
                 let base_y = clamp_y(boat.position.y, boat.last_dir);
-                for (x_off, y_off, glyph) in boat_glyphs(&boat.name, boat.last_dir, row_step) {
+                for (x_off, y_off, glyph) in
+                    boat_glyphs(&boat.name, boat.last_dir, row_step, col_step)
+                {
                     ctx.print(
                         boat.position.x as f64 + x_off,
                         base_y + y_off,
