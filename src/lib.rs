@@ -27,6 +27,31 @@ pub enum GameEvent {
     NameEvent { id: u64, name: String },
     /// Broadcast by the server when a client disconnects.
     ByeEvent { id: u64 },
+
+    // ── Map protocol ──────────────────────────────────────────────────────────
+
+    /// Sent by the server right after HelloEvent to describe the map dimensions and chunk layout.
+    /// `tile_width` / `tile_height`: full map size in tiles.
+    /// `chunk_size`: tiles per chunk (chunks are square).
+    /// `meters_per_tile`: real-world scale, informational for now.
+    WorldInfoEvent {
+        tile_width: u32,
+        tile_height: u32,
+        chunk_size: u32,
+        meters_per_tile: f32,
+    },
+
+    /// Sent by the client to request a single map chunk by its chunk-grid coordinates.
+    MapChunkRequest { chunk_x: u32, chunk_y: u32 },
+
+    /// Sent by the server in response to a MapChunkRequest.
+    /// `data` is `chunk_size × chunk_size` bytes, row-major (row 0 = northernmost).
+    /// Tile values: 0 = open water, 1 = coastline / grynnor (#), 2 = solid land.
+    MapChunkResponse {
+        chunk_x: u32,
+        chunk_y: u32,
+        data: Vec<u8>,
+    },
 }
 
 /// Serialize and send a `GameEvent` over a WebSocket stream.
