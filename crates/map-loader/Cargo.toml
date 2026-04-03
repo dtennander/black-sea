@@ -1,0 +1,14 @@
+[package]
+name = "black-sea-map-loader"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+black-sea-protocol = { path = "../protocol" }
+anyhow = "1.0.102"
+shapefile = "0.8"
+geo = "0.32"
+zip = "2"
+ureq = { version = "3", features = ["rustls"] }
+indicatif = "0.18"
+rayon = "1"

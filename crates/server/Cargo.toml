@@ -1,0 +1,16 @@
+[package]
+name = "black-sea-server"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "server"
+path = "src/main.rs"
+
+[dependencies]
+black-sea-protocol = { path = "../protocol" }
+black-sea-map-loader = { path = "../map-loader" }
+tokio = { version = "1.50.0", features = ["full"] }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
+anyhow = "1.0.102"
+rand = "0.9"

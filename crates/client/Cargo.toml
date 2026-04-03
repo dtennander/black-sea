@@ -1,0 +1,18 @@
+[package]
+name = "black-sea-client"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "client"
+path = "src/main.rs"
+
+[dependencies]
+black-sea-protocol = { path = "../protocol" }
+tokio = { version = "1.50.0", features = ["full"] }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
+rustls = { version = "0.23", features = ["ring"] }
+futures-util = "0.3"
+anyhow = "1.0.102"
+ratatui = "0.30"
+crossterm = "0.29"

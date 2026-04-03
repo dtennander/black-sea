@@ -1,29 +1,8 @@
-[package]
-name = "black-sea"
-version = "0.1.0"
-edition = "2024"
-
-[features]
-# Pulls in the GIS/map dependencies used only by the server binary.
-# Build the server with: cargo build --bin server --features server-map
-server-map = ["dep:shapefile", "dep:geo", "dep:zip", "dep:ureq", "dep:indicatif", "dep:rayon"]
-
-[dependencies]
-tokio = { version = "1.50.0", features = ["full"] }
-tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
-rustls = { version = "0.23", features = ["ring"] }
-futures-util = "0.3"
-anyhow = "1.0.102"
-serde = { version = "1", features = ["derive"] }
-bincode = "1"
-ratatui = "0.30"
-crossterm = "0.29"
-rand = "0.9"
-
-# Map / GIS — server only, enabled via the `server-map` feature
-shapefile = { version = "0.8", optional = true }
-geo = { version = "0.32", optional = true }
-zip = { version = "2", optional = true }
-ureq = { version = "3", features = ["rustls"], optional = true }
-indicatif = { version = "0.18", optional = true }
-rayon = { version = "1", optional = true }
+[workspace]
+members = [
+    "crates/protocol",
+    "crates/map-loader",
+    "crates/server",
+    "crates/client",
+]
+resolver = "2"

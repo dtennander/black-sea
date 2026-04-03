@@ -138,25 +138,56 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "843867be96c8daad0d758b57df9392b6d8d271134fce549de6ce169ff98a92af"
 
 [[package]]
-name = "black-sea"
+name = "black-sea-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "black-sea-protocol",
+ "crossterm",
+ "futures-util",
+ "ratatui",
+ "rustls",
+ "tokio",
+ "tokio-tungstenite",
+]
+
+[[package]]
+name = "black-sea-map-loader"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "black-sea-protocol",
+ "geo",
+ "indicatif",
+ "rayon",
+ "shapefile",
+ "ureq",
+ "zip",
+]
+
+[[package]]
+name = "black-sea-protocol"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "bincode",
- "crossterm",
  "futures-util",
- "geo",
- "indicatif",
- "rand 0.9.2",
- "ratatui",
- "rayon",
- "rustls",
  "serde",
- "shapefile",
+ "serde_repr",
  "tokio",
  "tokio-tungstenite",
- "ureq",
- "zip",
+]
+
+[[package]]
+name = "black-sea-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "black-sea-map-loader",
+ "black-sea-protocol",
+ "rand 0.9.2",
+ "tokio",
+ "tokio-tungstenite",
 ]
 
 [[package]]
@@ -1917,6 +1948,17 @@ dependencies = [
  "serde",
  "serde_core",
  "zmij",
+]
+
+[[package]]
+name = "serde_repr"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "175ee3e80ae9982737ca543e96133087cbd9a485eecc3bc4de9c1a37b47ea59c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
