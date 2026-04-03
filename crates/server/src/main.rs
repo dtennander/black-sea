@@ -17,7 +17,7 @@ const METRES_PER_TILE: f32 = 20.0;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let map_grid: Arc<MapGrid> = Arc::new(load_map()?);
+    let map_grid: Arc<MapGrid> = Arc::new(black_sea_map_loader::load_map()?);
     println!(
         "[map] Ready: {}×{} tiles, chunk_size={}",
         map_grid.width, map_grid.height, map_grid.chunk_size
@@ -47,10 +47,4 @@ async fn main() -> Result<()> {
             }
         });
     }
-}
-
-// ── Map loading ───────────────────────────────────────────────────────────────
-
-fn load_map() -> Result<MapGrid> {
-    black_sea_map_loader::load_map()
 }
