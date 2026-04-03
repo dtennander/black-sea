@@ -724,6 +724,32 @@ fn render(frame: &mut Frame, app: &App) {
                 );
             }
 
+            // ── Off-screen boat indicators ───────────────────────────────────
+            let center_x = canvas_w / 2.0;
+            let center_y = canvas_h / 2.0;
+            for boat in app.remote_boats.values() {
+                let (bx, by_raw) = world_to_canvas(boat.position.x, boat.position.y);
+                let by = clamp_y(by_raw, boat.last_dir);
+                // Only draw indicator if the boat is outside the viewport.
+                if bx >= 0.0 && bx <= canvas_w && by >= 0.0 && by <= canvas_h {
+                    continue;
+                }
+                // Direction vector from page center to the boat in canvas space.
+                let dx = bx - center_x;
+                let dy = by - center_y;
+                if dx == 0.0 && dy == 0.0 { continue; }
+                // Find t such that center + t*(dx,dy) just touches the viewport border.
+                let t = [
+                    if dx > 0.0 { (canvas_w - center_x) / dx } else if dx < 0.0 { -center_x / dx } else { f64::MAX },
+                    if dy > 0.0 { (canvas_h - center_y) / dy } else if dy < 0.0 { -center_y / dy } else { f64::MAX },
+                ]
+                .into_iter()
+                .fold(f64::MAX, f64::min);
+                let ix = (center_x + t * dx).clamp(0.0, canvas_w);
+                let iy = (center_y + t * dy).clamp(0.0, canvas_h);
+                ctx.print(ix, iy, Span::styled("*", Style::new().fg(Color::Cyan)));
+            }
+
             // ── Speech bubbles ───────────────────────────────────────────────
             for bubble in &app.bubbles {
                 let (bx, by) = world_to_canvas(bubble.position.x, bubble.position.y);
