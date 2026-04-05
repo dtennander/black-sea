@@ -1,13 +1,13 @@
 use black_sea_protocol::Tile;
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::canvas::{Canvas, Context};
 use ratatui::widgets::Block;
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
+use ratatui::widgets::canvas::{Canvas, Context};
 
-use crate::app::{App, Direction, BUBBLE_OFFSET, BUBBLE_TTL, PAGE_TILES_H, PAGE_TILES_W};
+use crate::app::{App, BUBBLE_OFFSET, BUBBLE_TTL, Direction, PAGE_TILES_H, PAGE_TILES_W};
 
 // ── Boat glyphs ───────────────────────────────────────────────────────────────
 
@@ -67,16 +67,26 @@ pub fn coast_char(app: &App, wx: u32, wy: u32) -> &'static str {
     let e = solid(x + 1, y);
 
     match (n, s, w, e) {
-        (false, false, true, true) => "|",
-        (false, false, true, false) => "|",
-        (false, false, false, true) => "|",
-        (true, true, false, false) => "-",
-        (true, false, false, false) => "-",
-        (false, true, false, false) => "-",
-        (false, true, false, true) => "/",  // bottom-left corner
-        (true, false, true, false) => "/",  // top-right corner
-        (false, true, true, false) => "\\", // bottom-right corner
-        (true, false, false, true) => "\\", // top-left corner
+        // Straight runs: character matches direction of travel along the coastline
+        (false, false, true,  true)  => "-", // W+E solid → walking east-west
+        (false, false, true,  false) => "-", // W only
+        (false, false, false, true)  => "-", // E only
+        (true,  true,  false, false) => "|", // N+S solid → walking north-south
+        (true,  false, false, false) => "|", // N only
+        (false, true,  false, false) => "|", // S only
+        // Corners
+        (false, true,  false, true)  => "/",   // SW corner
+        (true,  false, true,  false) => "/",   // NE corner
+        (false, true,  true,  false) => "\\",  // SE corner
+        (true,  false, false, true)  => "\\",  // NW corner
+        // T-junctions: continue the dominant axis
+        (true,  true,  true,  false) => "|",   // N+S+W → north-south run
+        (true,  true,  false, true)  => "|",   // N+S+E → north-south run
+        (true,  false, true,  true)  => "-",   // N+W+E → east-west run
+        (false, true,  true,  true)  => "-",   // S+W+E → east-west run
+        // Cross
+        (true,  true,  true,  true)  => "+",
+        // Isolated — guard in draw_coastline prevents this during rendering
         _ => " ",
     }
 }
@@ -313,11 +323,70 @@ mod tests {
         app
     }
 
+    /// Place a Coast tile at (5,5) and Land tiles at each (col_offset, row_offset) in `neighbors`.
+    fn app_with_coast_and_neighbors(neighbors: &[(i32, i32)]) -> App {
+        let chunk_size = 10u32;
+        let mut grid = vec![vec![Tile::Water; 10]; 10];
+        grid[5][5] = Tile::Coast;
+        for &(dc, dr) in neighbors {
+            grid[(5 + dr) as usize][(5 + dc) as usize] = Tile::Land;
+        }
+
+        let mut app = App::new("test".into());
+        app.world_info = Some(WorldInfo {
+            tile_width: 10,
+            tile_height: 10,
+            chunk_size,
+        });
+
+        let mut data: Vec<Tile> = Vec::with_capacity(100);
+        for r in &grid {
+            data.extend_from_slice(r);
+        }
+        app.loaded_chunks.insert((0, 0), data);
+        app
+    }
+
     #[test]
     fn coast_char_isolated_returns_space() {
         // A coast tile with no solid cardinal neighbours is suppressed (rendered as " ").
         // This protects the design rule: tiny isolated islets are hidden at this zoom level.
         let app = app_with_single_tile(5, 5, Tile::Coast);
         assert_eq!(coast_char(&app, 5, 5), " ");
+    }
+
+    #[test]
+    fn coast_char_t_junction_ns_w() {
+        // N+S+W neighbors → walking north-south → "|"
+        let app = app_with_coast_and_neighbors(&[(0, -1), (0, 1), (-1, 0)]);
+        assert_eq!(coast_char(&app, 5, 5), "|");
+    }
+
+    #[test]
+    fn coast_char_t_junction_ns_e() {
+        // N+S+E neighbors → walking north-south → "|"
+        let app = app_with_coast_and_neighbors(&[(0, -1), (0, 1), (1, 0)]);
+        assert_eq!(coast_char(&app, 5, 5), "|");
+    }
+
+    #[test]
+    fn coast_char_t_junction_nwe() {
+        // N+W+E neighbors → walking east-west → "-"
+        let app = app_with_coast_and_neighbors(&[(0, -1), (-1, 0), (1, 0)]);
+        assert_eq!(coast_char(&app, 5, 5), "-");
+    }
+
+    #[test]
+    fn coast_char_t_junction_swe() {
+        // S+W+E neighbors → walking east-west → "-"
+        let app = app_with_coast_and_neighbors(&[(0, 1), (-1, 0), (1, 0)]);
+        assert_eq!(coast_char(&app, 5, 5), "-");
+    }
+
+    #[test]
+    fn coast_char_cross() {
+        // All four cardinal neighbors → "+"
+        let app = app_with_coast_and_neighbors(&[(0, -1), (0, 1), (-1, 0), (1, 0)]);
+        assert_eq!(coast_char(&app, 5, 5), "+");
     }
 }
