@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [[bin]]
-name = "client"
+name = "black-sea"
 path = "src/main.rs"
 
 [dependencies]
@@ -16,3 +16,6 @@ futures-util = "0.3"
 anyhow = "1.0.102"
 ratatui = "0.30"
 crossterm = "0.29"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+serde_json = "1"
+semver = "1"

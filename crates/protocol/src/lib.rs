@@ -21,6 +21,7 @@ pub struct Position {
 /// |---|---|
 /// | `RegisterEvent` | Client → Server |
 /// | `HelloEvent` | Server → Client |
+/// | `ServerVersionEvent` | Server → Client |
 /// | `WorldInfoEvent` | Server → Client |
 /// | `WorldStateEvent` | Server → Client |
 /// | `NameEvent` | Server → Client |
@@ -90,4 +91,13 @@ pub enum GameEvent {
         chunk_y: u32,
         data: Vec<Tile>,
     },
+
+    /// Sent by the server immediately after `HelloEvent` to identify the server version.
+    ///
+    /// `version` is the server binary's `CARGO_PKG_VERSION` semver string (e.g. `"0.2.1"`).
+    /// Clients use this to detect protocol incompatibility and prompt users to upgrade.
+    ///
+    /// **Must remain the last variant** — bincode encodes enum variants by index, so
+    /// appending here preserves all existing discriminants.
+    ServerVersionEvent { version: String },
 }
