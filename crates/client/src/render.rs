@@ -7,7 +7,7 @@ use ratatui::widgets::Block;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::canvas::{Canvas, Context};
 
-use crate::app::{App, BUBBLE_OFFSET, BUBBLE_TTL, Direction, PAGE_TILES_H, PAGE_TILES_W};
+use crate::app::{App, BUBBLE_OFFSET, BUBBLE_TTL, Direction, PAGE_TILES_H, PAGE_TILES_W, UpdateStatus};
 
 // ── Boat glyphs ───────────────────────────────────────────────────────────────
 
@@ -94,11 +94,22 @@ pub fn coast_char(app: &App, wx: u32, wy: u32) -> &'static str {
 // ── Main render function ──────────────────────────────────────────────────────
 
 pub fn render(frame: &mut Frame, app: &App) {
-    let [world_area, input_area] =
-        Layout::vertical([Constraint::Min(0), Constraint::Length(3)]).areas(frame.area());
-
-    render_input_bar(frame, app, input_area);
-    render_world(frame, app, world_area);
+    if let UpdateStatus::Incompatible { server_version } = &app.update_status {
+        let [world_area, warn_area, input_area] = Layout::vertical([
+            Constraint::Min(0),
+            Constraint::Length(3),
+            Constraint::Length(3),
+        ])
+        .areas(frame.area());
+        render_input_bar(frame, app, input_area);
+        render_world(frame, app, world_area);
+        render_update_warning(frame, server_version, warn_area);
+    } else {
+        let [world_area, input_area] =
+            Layout::vertical([Constraint::Min(0), Constraint::Length(3)]).areas(frame.area());
+        render_input_bar(frame, app, input_area);
+        render_world(frame, app, world_area);
+    }
 }
 
 fn render_input_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
@@ -151,9 +162,15 @@ fn render_world(frame: &mut Frame, app: &App, world_area: ratatui::layout::Rect)
     let own_glyphs = boat_glyphs(&app.my_name, app.last_dir, row_step, col_step);
 
     let (ppx, ppy) = app.current_page();
+    let update_note = match &app.update_status {
+        UpdateStatus::Compatible { patch_available: Some(v) } =>
+            format!("  · v{v} available — brew upgrade black-sea"),
+        UpdateStatus::Unknown => "  · server version unknown".to_string(),
+        _ => String::new(),
+    };
     let title = format!(
-        "World  [{}, {}]  page ({}, {})",
-        app.cursor.x as u32, app.cursor.y as u32, ppx, ppy
+        "World  [{}, {}]  page ({}, {}){}",
+        app.cursor.x as u32, app.cursor.y as u32, ppx, ppy, update_note
     );
 
     let canvas = Canvas::default()
@@ -278,6 +295,17 @@ fn draw_offscreen_indicators(
         let iy = (center_y + t * dy).clamp(0.0, canvas_h);
         ctx.print(ix, iy, Span::styled("*", Style::new().fg(Color::Cyan)));
     }
+}
+
+fn render_update_warning(frame: &mut Frame, server_version: &str, area: ratatui::layout::Rect) {
+    let msg = Line::from(Span::styled(
+        format!("  Server is v{server_version} — your client is outdated.  Run: brew upgrade black-sea"),
+        Style::new().fg(Color::Red).add_modifier(Modifier::BOLD),
+    ));
+    frame.render_widget(
+        Paragraph::new(msg).block(Block::bordered().title("Client update required")),
+        area,
+    );
 }
 
 fn draw_bubbles(ctx: &mut Context, app: &App, world_to_canvas: &impl Fn(f32, f32) -> (f64, f64)) {

@@ -44,15 +44,15 @@ jobs:
       - name: Build client
         env:
           BLACK_SEA_SERVER_DEFAULT: wss://world.black-sea.tennander.se
-        run: cargo build --release --bin client --target ${{ matrix.target }}
+        run: cargo build --release --bin black-sea --target ${{ matrix.target }}
 
       - name: Rename binary (unix)
         if: matrix.runner != 'windows-latest'
-        run: mv target/${{ matrix.target }}/release/client ${{ matrix.binary }}
+        run: mv target/${{ matrix.target }}/release/black-sea ${{ matrix.binary }}
 
       - name: Rename binary (windows)
         if: matrix.runner == 'windows-latest'
-        run: mv target/${{ matrix.target }}/release/client.exe ${{ matrix.binary }}
+        run: mv target/${{ matrix.target }}/release/black-sea.exe ${{ matrix.binary }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -72,6 +72,13 @@ jobs:
         with:
           merge-multiple: true
 
+      - name: Compute SHA256 checksums
+        id: checksums
+        run: |
+          echo "macos_x86=$(sha256sum black-sea-client-macos-x86_64 | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "macos_arm64=$(sha256sum black-sea-client-macos-aarch64 | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "linux=$(sha256sum black-sea-client-linux | awk '{print $1}')" >> $GITHUB_OUTPUT
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
@@ -81,3 +88,51 @@ jobs:
             black-sea-client-macos-aarch64
             black-sea-client-windows.exe
             black-sea-client-linux
+
+      - name: Update Homebrew tap formula
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          SHA_MACOS_X86: ${{ steps.checksums.outputs.macos_x86 }}
+          SHA_MACOS_ARM64: ${{ steps.checksums.outputs.macos_arm64 }}
+          SHA_LINUX: ${{ steps.checksums.outputs.linux }}
+        run: |
+          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/dtennander/homebrew-black-sea.git tap
+          cd tap && mkdir -p Formula
+          cat > Formula/black-sea.rb << FORMULA
+          class BlackSea < Formula
+            desc "Black Sea — terminal multiplayer sailing game"
+            homepage "https://github.com/dtennander/black-sea"
+            version "${TAG#v}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/dtennander/black-sea/releases/download/${TAG}/black-sea-client-macos-aarch64"
+                sha256 "${SHA_MACOS_ARM64}"
+              else
+                url "https://github.com/dtennander/black-sea/releases/download/${TAG}/black-sea-client-macos-x86_64"
+                sha256 "${SHA_MACOS_X86}"
+              end
+            end
+
+            on_linux do
+              url "https://github.com/dtennander/black-sea/releases/download/${TAG}/black-sea-client-linux"
+              sha256 "${SHA_LINUX}"
+            end
+
+            def install
+              bin_name = if OS.mac?
+                Hardware::CPU.arm? ? "black-sea-client-macos-aarch64" : "black-sea-client-macos-x86_64"
+              else
+                "black-sea-client-linux"
+              end
+              bin.install bin_name => "black-sea"
+            end
+          end
+          FORMULA
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add Formula/black-sea.rb
+          git commit -m "black-sea ${TAG}"
+          git push

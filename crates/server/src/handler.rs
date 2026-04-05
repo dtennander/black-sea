@@ -104,6 +104,14 @@ pub async fn handle(
 
     send_event(
         &mut ws,
+        &GameEvent::ServerVersionEvent {
+            version: env!("CARGO_PKG_VERSION").to_string(),
+        },
+    )
+    .await?;
+
+    send_event(
+        &mut ws,
         &GameEvent::WorldInfoEvent {
             tile_width: map.width,
             tile_height: map.height,
@@ -180,6 +188,7 @@ pub async fn handle(
                                 // These are never valid incoming messages from a client.
                                 GameEvent::RegisterEvent { .. }
                                 | GameEvent::HelloEvent { .. }
+                                | GameEvent::ServerVersionEvent { .. }
                                 | GameEvent::WorldStateEvent { .. }
                                 | GameEvent::WorldInfoEvent { .. }
                                 | GameEvent::NameEvent { .. }

@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use black_sea_protocol::{GameEvent, Position, Tile, recv_event, send_event};
 use crossterm::event::KeyEvent;
+use semver::Version;
 use tokio::sync::mpsc;
 
 use crate::render::render;
@@ -53,11 +54,25 @@ pub struct WorldInfo {
     pub chunk_size: u32,
 }
 
+// ── Update notification state ─────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Default)]
+pub enum UpdateStatus {
+    /// No version information received yet.
+    #[default]
+    Unknown,
+    /// Server version matches major.minor; a newer patch may be available.
+    Compatible { patch_available: Option<String> },
+    /// Server major or minor version differs — client needs to update.
+    Incompatible { server_version: String },
+}
+
 // ── Messages between the input task and the game loop ────────────────────────
 
 pub enum AppMsg {
     Key(KeyEvent),
     Tick,
+    LatestRelease(String),
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -80,6 +95,8 @@ pub struct App {
     pub pending_chunks: HashSet<(u32, u32)>,
     /// Outbound chunk requests buffered here so the game loop can send them.
     pub chunk_requests: Vec<(u32, u32)>,
+
+    pub update_status: UpdateStatus,
 }
 
 impl App {
@@ -96,6 +113,7 @@ impl App {
             loaded_chunks: HashMap::new(),
             pending_chunks: HashSet::new(),
             chunk_requests: Vec::new(),
+            update_status: UpdateStatus::Unknown,
         }
     }
 
@@ -237,6 +255,26 @@ impl App {
     }
 }
 
+// ── Background update check ───────────────────────────────────────────────────
+
+async fn fetch_latest_version() -> Option<String> {
+    let client = reqwest::Client::builder()
+        .user_agent("black-sea-client")
+        .build()
+        .ok()?;
+    let resp: serde_json::Value = client
+        .get("https://api.github.com/repos/dtennander/black-sea/releases/latest")
+        .send()
+        .await
+        .ok()?
+        .json()
+        .await
+        .ok()?;
+    resp["tag_name"]
+        .as_str()
+        .map(|s: &str| s.trim_start_matches('v').to_string())
+}
+
 // ── Game loop ─────────────────────────────────────────────────────────────────
 
 type ClientWs = tokio_tungstenite::WebSocketStream<
@@ -250,6 +288,14 @@ pub async fn run(
 ) -> Result<()> {
     let mut app = App::new(name);
     let (tx, mut rx) = mpsc::channel::<AppMsg>(64);
+
+    // Spawn a background task to check for the latest release on GitHub.
+    let tx_update = tx.clone();
+    tokio::spawn(async move {
+        if let Some(v) = fetch_latest_version().await {
+            let _ = tx_update.send(AppMsg::LatestRelease(v)).await;
+        }
+    });
 
     // Spawn a task to forward keyboard events and periodic ticks.
     let tx_key = tx.clone();
@@ -287,6 +333,21 @@ pub async fn run(
                         }
                     }
                     Some(AppMsg::Tick) => {}
+                    Some(AppMsg::LatestRelease(v)) => {
+                        let own = Version::parse(env!("CARGO_PKG_VERSION"))
+                            .unwrap_or(Version::new(0, 0, 0));
+                        if let Ok(latest) = Version::parse(&v) {
+                            if latest > own {
+                                if matches!(
+                                    app.update_status,
+                                    UpdateStatus::Compatible { .. } | UpdateStatus::Unknown
+                                ) {
+                                    app.update_status =
+                                        UpdateStatus::Compatible { patch_available: Some(v) };
+                                }
+                            }
+                        }
+                    }
                     None => break,
                 }
             }
@@ -373,6 +434,17 @@ fn handle_server_event(app: &mut App, event: GameEvent) {
         GameEvent::SayEvent { position, text } => {
             let pos = position.unwrap_or_else(|| app.cursor.clone());
             app.push_bubble(pos, text);
+        }
+
+        GameEvent::ServerVersionEvent { version } => {
+            let own = Version::parse(env!("CARGO_PKG_VERSION"))
+                .unwrap_or(Version::new(0, 0, 0));
+            app.update_status = match Version::parse(&version) {
+                Ok(srv) if srv.major == own.major && srv.minor == own.minor => {
+                    UpdateStatus::Compatible { patch_available: None }
+                }
+                _ => UpdateStatus::Incompatible { server_version: version },
+            };
         }
 
         // Client should never receive these — ignore.
