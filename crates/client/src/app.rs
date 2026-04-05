@@ -334,7 +334,7 @@ pub async fn run(
                     }
                     Some(AppMsg::Tick) => {}
                     Some(AppMsg::LatestRelease(v)) => {
-                        let own = Version::parse(env!("CARGO_PKG_VERSION"))
+                        let own = Version::parse(env!("GIT_VERSION"))
                             .unwrap_or(Version::new(0, 0, 0));
                         if let Ok(latest) = Version::parse(&v) {
                             if latest > own {
@@ -437,7 +437,7 @@ fn handle_server_event(app: &mut App, event: GameEvent) {
         }
 
         GameEvent::ServerVersionEvent { version } => {
-            let own = Version::parse(env!("CARGO_PKG_VERSION"))
+            let own = Version::parse(env!("GIT_VERSION"))
                 .unwrap_or(Version::new(0, 0, 0));
             app.update_status = match Version::parse(&version) {
                 Ok(srv) if srv.major == own.major && srv.minor == own.minor => {

@@ -105,7 +105,7 @@ pub async fn handle(
     send_event(
         &mut ws,
         &GameEvent::ServerVersionEvent {
-            version: env!("CARGO_PKG_VERSION").to_string(),
+            version: env!("GIT_VERSION").to_string(),
         },
     )
     .await?;
