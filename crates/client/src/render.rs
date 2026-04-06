@@ -7,7 +7,9 @@ use ratatui::widgets::Block;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::canvas::{Canvas, Context};
 
-use crate::app::{App, BUBBLE_OFFSET, BUBBLE_TTL, Direction, PAGE_TILES_H, PAGE_TILES_W, UpdateStatus};
+use crate::app::{
+    App, BUBBLE_OFFSET, BUBBLE_TTL, Direction, PAGE_TILES_H, PAGE_TILES_W, UpdateStatus,
+};
 
 // ── Boat glyphs ───────────────────────────────────────────────────────────────
 
@@ -68,24 +70,24 @@ pub fn coast_char(app: &App, wx: u32, wy: u32) -> &'static str {
 
     match (n, s, w, e) {
         // Straight runs: character matches direction of travel along the coastline
-        (false, false, true,  true)  => "-", // W+E solid → walking east-west
-        (false, false, true,  false) => "-", // W only
-        (false, false, false, true)  => "-", // E only
-        (true,  true,  false, false) => "|", // N+S solid → walking north-south
-        (true,  false, false, false) => "|", // N only
-        (false, true,  false, false) => "|", // S only
+        (false, false, true, true) => "-", // W+E solid → walking east-west
+        (false, false, true, false) => "-", // W only
+        (false, false, false, true) => "-", // E only
+        (true, true, false, false) => "|", // N+S solid → walking north-south
+        (true, false, false, false) => "|", // N only
+        (false, true, false, false) => "|", // S only
         // Corners
-        (false, true,  false, true)  => "/",   // SW corner
-        (true,  false, true,  false) => "/",   // NE corner
-        (false, true,  true,  false) => "\\",  // SE corner
-        (true,  false, false, true)  => "\\",  // NW corner
+        (false, true, false, true) => "/",  // SW corner
+        (true, false, true, false) => "/",  // NE corner
+        (false, true, true, false) => "\\", // SE corner
+        (true, false, false, true) => "\\", // NW corner
         // T-junctions: continue the dominant axis
-        (true,  true,  true,  false) => "|",   // N+S+W → north-south run
-        (true,  true,  false, true)  => "|",   // N+S+E → north-south run
-        (true,  false, true,  true)  => "-",   // N+W+E → east-west run
-        (false, true,  true,  true)  => "-",   // S+W+E → east-west run
+        (true, true, true, false) => "|", // N+S+W → north-south run
+        (true, true, false, true) => "|", // N+S+E → north-south run
+        (true, false, true, true) => "-", // N+W+E → east-west run
+        (false, true, true, true) => "-", // S+W+E → east-west run
         // Cross
-        (true,  true,  true,  true)  => "+",
+        (true, true, true, true) => "+",
         // Isolated — guard in draw_coastline prevents this during rendering
         _ => " ",
     }
@@ -163,8 +165,9 @@ fn render_world(frame: &mut Frame, app: &App, world_area: ratatui::layout::Rect)
 
     let (ppx, ppy) = app.current_page();
     let update_note = match &app.update_status {
-        UpdateStatus::Compatible { patch_available: Some(v) } =>
-            format!("  · v{v} available — brew upgrade black-sea"),
+        UpdateStatus::Compatible {
+            patch_available: Some(v),
+        } => format!("  · v{v} available — brew upgrade black-sea"),
         UpdateStatus::Unknown => "  · server version unknown".to_string(),
         _ => String::new(),
     };
@@ -179,9 +182,18 @@ fn render_world(frame: &mut Frame, app: &App, world_area: ratatui::layout::Rect)
         .y_bounds([0.0, canvas_h])
         .paint(move |ctx: &mut Context| {
             draw_coastline(ctx, app, page_ox, page_oy, canvas_h);
-            draw_remote_boats(ctx, app, &world_to_canvas, &clamp_y, row_step, col_step);
+            draw_remote_boats(
+                ctx,
+                app,
+                &world_to_canvas,
+                &clamp_y,
+                row_step,
+                col_step,
+                canvas_w,
+                canvas_h,
+            );
             draw_own_boat(ctx, &own_glyphs, own_cx, own_cy);
-            draw_offscreen_indicators(ctx, app, &world_to_canvas, &clamp_y, canvas_w, canvas_h);
+            draw_offscreen_indicators(ctx, app, &world_to_canvas, canvas_w, canvas_h);
             draw_bubbles(ctx, app, &world_to_canvas);
         });
 
@@ -224,9 +236,14 @@ fn draw_remote_boats(
     clamp_y: &impl Fn(f64, Direction) -> f64,
     row_step: f64,
     col_step: f64,
+    canvas_w: f64,
+    canvas_h: f64,
 ) {
     for boat in app.remote_boats.values() {
         let (bx, by_raw) = world_to_canvas(boat.position.x, boat.position.y);
+        if bx < 0.0 || bx > canvas_w || by_raw < 0.0 || by_raw > canvas_h {
+            continue; // off-screen; 
+        }
         let by = clamp_y(by_raw, boat.last_dir);
         for (x_off, y_off, glyph) in boat_glyphs(&boat.name, boat.last_dir, row_step, col_step) {
             ctx.print(
@@ -255,7 +272,6 @@ fn draw_offscreen_indicators(
     ctx: &mut Context,
     app: &App,
     world_to_canvas: &impl Fn(f32, f32) -> (f64, f64),
-    clamp_y: &impl Fn(f64, Direction) -> f64,
     canvas_w: f64,
     canvas_h: f64,
 ) {
@@ -263,12 +279,11 @@ fn draw_offscreen_indicators(
     let center_y = canvas_h / 2.0;
     for boat in app.remote_boats.values() {
         let (bx, by_raw) = world_to_canvas(boat.position.x, boat.position.y);
-        let by = clamp_y(by_raw, boat.last_dir);
-        if bx >= 0.0 && bx <= canvas_w && by >= 0.0 && by <= canvas_h {
+        if bx >= 0.0 && bx <= canvas_w && by_raw >= 0.0 && by_raw <= canvas_h {
             continue; // already on screen
         }
         let dx = bx - center_x;
-        let dy = by - center_y;
+        let dy = by_raw - center_y;
         if dx == 0.0 && dy == 0.0 {
             continue;
         }
@@ -299,7 +314,9 @@ fn draw_offscreen_indicators(
 
 fn render_update_warning(frame: &mut Frame, server_version: &str, area: ratatui::layout::Rect) {
     let msg = Line::from(Span::styled(
-        format!("  Server is v{server_version} — your client is outdated.  Run: brew upgrade black-sea"),
+        format!(
+            "  Server is v{server_version} — your client is outdated.  Run: brew upgrade black-sea"
+        ),
         Style::new().fg(Color::Red).add_modifier(Modifier::BOLD),
     ));
     frame.render_widget(
