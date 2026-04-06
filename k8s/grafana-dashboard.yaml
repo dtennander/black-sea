@@ -1,0 +1,212 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: black-sea-grafana-dashboard
+  namespace: black-sea
+  labels:
+    grafana_dashboard: "1"
+data:
+  black-sea.json: |
+    {
+      "title": "Black Sea - Game Server",
+      "uid": "black-sea-server",
+      "tags": ["black-sea", "game"],
+      "editable": true,
+      "graphTooltip": 1,
+      "refresh": "30s",
+      "schemaVersion": 39,
+      "time": { "from": "now-1h", "to": "now" },
+      "timepicker": {},
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "Active Connections",
+          "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "auto"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 10 },
+                  { "color": "red", "value": 50 }
+                ]
+              }
+            }
+          },
+          "targets": [
+            {
+              "expr": "blacksea_active_connections",
+              "legendFormat": "active",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Total Connections",
+          "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "auto"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "fixed", "fixedColor": "blue" }
+            }
+          },
+          "targets": [
+            {
+              "expr": "blacksea_total_connections_total",
+              "legendFormat": "total",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Lag Events (last 5m)",
+          "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "auto"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 1 },
+                  { "color": "red", "value": 10 }
+                ]
+              }
+            }
+          },
+          "targets": [
+            {
+              "expr": "increase(blacksea_broadcast_lag_total[5m])",
+              "legendFormat": "lag",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "Nautiska Mil Seglat (totalt)",
+          "gridPos": { "x": 0, "y": 4, "w": 4, "h": 4 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "auto"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "fixed", "fixedColor": "blue" },
+              "decimals": 2,
+              "unit": "nm"
+            }
+          },
+          "targets": [
+            {
+              "expr": "blacksea_nautical_miles_sailed_milli_total / 1000",
+              "legendFormat": "nm",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "timeseries",
+          "title": "Connection Rate",
+          "gridPos": { "x": 4, "y": 4, "w": 8, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "options": { "tooltip": { "mode": "single" } },
+          "fieldConfig": {
+            "defaults": { "unit": "short", "decimals": 2 }
+          },
+          "targets": [
+            {
+              "expr": "rate(blacksea_total_connections_total[1m])",
+              "legendFormat": "connections/s",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "timeseries",
+          "title": "Event Rates",
+          "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "options": { "tooltip": { "mode": "multi" } },
+          "fieldConfig": {
+            "defaults": { "unit": "reqps" }
+          },
+          "targets": [
+            {
+              "expr": "rate(blacksea_moves_total[1m])",
+              "legendFormat": "moves/s",
+              "refId": "A"
+            },
+            {
+              "expr": "rate(blacksea_chat_messages_total[1m])",
+              "legendFormat": "chat/s",
+              "refId": "B"
+            },
+            {
+              "expr": "rate(blacksea_map_chunk_requests_total[1m])",
+              "legendFormat": "map chunks/s",
+              "refId": "C"
+            },
+            {
+              "expr": "rate(blacksea_invalid_moves_total[1m])",
+              "legendFormat": "invalid moves/s",
+              "refId": "D"
+            },
+            {
+              "expr": "rate(blacksea_broadcast_lag_total[1m])",
+              "legendFormat": "lag msgs/s",
+              "refId": "E"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "type": "timeseries",
+          "title": "Nautiska Mil Seglat (rate)",
+          "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "options": { "tooltip": { "mode": "single" } },
+          "fieldConfig": {
+            "defaults": { "unit": "short", "decimals": 4 }
+          },
+          "targets": [
+            {
+              "expr": "rate(blacksea_nautical_miles_sailed_milli_total[1m]) / 1000",
+              "legendFormat": "nm/s",
+              "refId": "A"
+            }
+          ]
+        }
+      ]
+    }

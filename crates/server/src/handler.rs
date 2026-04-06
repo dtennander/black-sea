@@ -9,6 +9,7 @@ use tokio::sync::broadcast;
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::protocol::{CloseFrame, frame::coding::CloseCode};
 
+use crate::metrics;
 use crate::spawn::find_free_position;
 
 // ── Shared state types ────────────────────────────────────────────────────────
@@ -150,6 +151,7 @@ pub async fn handle(
                         Some(event) => {
                             let broadcast_event = match event {
                                 GameEvent::SayEvent { position: client_pos, ref text } => {
+                                    metrics::CHAT_MESSAGES_TOTAL.inc();
                                     let authoritative_pos = {
                                         let m = boats.lock().unwrap();
                                         m.get(&self_id).map(|e| e.position.clone())
@@ -167,16 +169,25 @@ pub async fn handle(
 
                                 GameEvent::MoveEvent { position, .. } => {
                                     if !map.is_passable(&position) {
+                                        metrics::INVALID_MOVES_TOTAL.inc();
                                         continue; // silently drop invalid moves
                                     }
                                     let mut m = boats.lock().unwrap();
                                     if let Some(entry) = m.get_mut(&self_id) {
+                                        let dx = (entry.position.x - position.x) as f64;
+                                        let dy = (entry.position.y - position.y) as f64;
+                                        let tiles = (dx * dx + dy * dy).sqrt();
+                                        // Each tile is 20m; 1 nautical mile = 1852m
+                                        let nm = tiles * 20.0 / 1852.0;
+                                        metrics::NAUTICAL_MILES_SAILED.inc_by((nm * 1000.0) as u64);
                                         entry.position = position.clone();
                                     }
+                                    metrics::MOVES_TOTAL.inc();
                                     GameEvent::MoveEvent { id: self_id, position }
                                 }
 
                                 GameEvent::MapChunkRequest { chunk_x, chunk_y } => {
+                                    metrics::MAP_CHUNK_REQUESTS_TOTAL.inc();
                                     let data = map.chunk_data(chunk_x, chunk_y);
                                     send_event(
                                         &mut ws,
@@ -217,6 +228,7 @@ pub async fn handle(
                         Ok(_) => {}
                         Err(broadcast::error::RecvError::Lagged(n)) => {
                             eprintln!("Client {self_id} lagged, dropped {n} events");
+                            metrics::BROADCAST_LAG_TOTAL.inc_by(n);
                         }
                         Err(broadcast::error::RecvError::Closed) => break,
                     }
@@ -229,6 +241,7 @@ pub async fn handle(
 
     // ── Cleanup ───────────────────────────────────────────────────────────────
     boats.lock().unwrap().remove(&self_id);
+    metrics::ACTIVE_CONNECTIONS.dec();
     let _ = tx.send(Envelope {
         sender_id: self_id,
         event: GameEvent::ByeEvent { id: self_id },

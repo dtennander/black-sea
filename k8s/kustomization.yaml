@@ -5,6 +5,8 @@ resources:
   - service.yaml
   - ingress.yaml
   - pvc.yaml
+  - servicemonitor.yaml
+  - grafana-dashboard.yaml
 images:
   - name: ghcr.io/dtennander/black-sea
     newName: ghcr.io/dtennander/black-sea

@@ -12,4 +12,8 @@ spec:
     - port: 80
       targetPort: 7456
       protocol: TCP
-      name: http
+      name: websocket
+    - port: 9090
+      targetPort: 9090
+      protocol: TCP
+      name: metrics

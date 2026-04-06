@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: black-sea-metrics
+  namespace: black-sea
+  labels:
+    app: black-sea-server
+spec:
+  selector:
+    matchLabels:
+      app: black-sea-server
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s

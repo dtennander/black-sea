@@ -1,4 +1,5 @@
 mod handler;
+mod metrics;
 mod spawn;
 
 use std::collections::HashMap;
@@ -28,9 +29,18 @@ async fn main() -> Result<()> {
     let boats: BoatMap = Arc::new(Mutex::new(HashMap::new()));
     println!("Running Server");
 
+    metrics::init();
+    tokio::spawn(async {
+        if let Err(e) = metrics::serve_metrics("0.0.0.0:9090").await {
+            eprintln!("[metrics] Server error: {e}");
+        }
+    });
+
     loop {
         let (socket, addr) = listener.accept().await?;
         println!("New connection from: {addr}");
+        metrics::TOTAL_CONNECTIONS.inc();
+        metrics::ACTIVE_CONNECTIONS.inc();
 
         let tx = tx.clone();
         let rx = tx.subscribe();

@@ -21,6 +21,9 @@ spec:
           image: ghcr.io/dtennander/black-sea
           ports:
             - containerPort: 7456
+              name: websocket
+            - containerPort: 9090
+              name: metrics
           env:
             - name: BLACK_SEA_CACHE_DIR
               value: /data/osm-cache
