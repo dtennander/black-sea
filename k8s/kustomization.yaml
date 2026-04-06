@@ -4,6 +4,7 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingress.yaml
+  - pvc.yaml
 images:
   - name: ghcr.io/dtennander/black-sea
     newName: ghcr.io/dtennander/black-sea
