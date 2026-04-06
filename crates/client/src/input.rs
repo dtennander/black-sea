@@ -14,6 +14,69 @@ type ClientWs = tokio_tungstenite::WebSocketStream<
     tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
 >;
 
+// ── Incompatibility screen ────────────────────────────────────────────────────
+
+/// Show a full-screen error indicating the client and server are incompatible.
+/// Waits for the user to press Enter, Esc, or q before returning.
+pub async fn show_incompatible_screen(
+    terminal: &mut ratatui::DefaultTerminal,
+    server_version: &str,
+) -> Result<()> {
+    loop {
+        terminal.draw(|frame| render_incompatible_screen(frame, server_version))?;
+        if event::poll(Duration::from_millis(50))?
+            && let Event::Key(key) = event::read()?
+            && key.kind == KeyEventKind::Press
+        {
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => return Ok(()),
+                _ => {}
+            }
+        }
+    }
+}
+
+fn render_incompatible_screen(frame: &mut Frame, server_version: &str) {
+    let area = frame.area();
+    let [_, center, _] = Layout::vertical([
+        Constraint::Percentage(35),
+        Constraint::Length(9),
+        Constraint::Min(0),
+    ])
+    .areas(area);
+
+    let own_version = env!("GIT_VERSION");
+    let content = vec![
+        Line::from(Span::styled(
+            "  Client / server version mismatch",
+            Style::new().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            format!("  Server is running protocol v{server_version}"),
+            Style::new().fg(Color::Yellow),
+        )),
+        Line::from(Span::styled(
+            format!("  Your client is v{own_version}"),
+            Style::new().fg(Color::Yellow),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  Run:  brew upgrade black-sea",
+            Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  Press Enter or q to exit.",
+            Style::new().fg(Color::DarkGray),
+        )),
+    ];
+
+    let widget = Paragraph::new(content)
+        .block(Block::bordered().title("Update required — cannot connect"));
+    frame.render_widget(widget, center);
+}
+
 // ── Name-entry screen ─────────────────────────────────────────────────────────
 
 /// Show a name-entry TUI screen and return the name the user typed.

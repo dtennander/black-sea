@@ -92,7 +92,7 @@ pub enum GameEvent {
         data: Vec<Tile>,
     },
 
-    /// Sent by the server immediately after `HelloEvent` to identify the server version.
+    /// Sent by the server immediately on WebSocket connection, before `RegisterEvent`, to identify the server version.
     ///
     /// `version` is the server binary's `CARGO_PKG_VERSION` semver string (e.g. `"0.2.1"`).
     /// Clients use this to detect protocol incompatibility and prompt users to upgrade.

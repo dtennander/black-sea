@@ -52,6 +52,15 @@ pub async fn handle(
 ) -> Result<()> {
     let self_id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
 
+    // Send version immediately so the client can check compatibility before registering.
+    send_event(
+        &mut ws,
+        &GameEvent::ServerVersionEvent {
+            version: env!("CLIENT_VERSION").to_string(),
+        },
+    )
+    .await?;
+
     // ── Registration ──────────────────────────────────────────────────────────
     let name = loop {
         match recv_event(&mut ws).await? {
@@ -98,14 +107,6 @@ pub async fn handle(
         &GameEvent::HelloEvent {
             your_id: self_id,
             start_position,
-        },
-    )
-    .await?;
-
-    send_event(
-        &mut ws,
-        &GameEvent::ServerVersionEvent {
-            version: env!("CLIENT_VERSION").to_string(),
         },
     )
     .await?;
