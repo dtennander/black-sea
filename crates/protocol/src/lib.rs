@@ -92,6 +92,15 @@ pub enum GameEvent {
         data: Vec<Tile>,
     },
 
+    /// Low-resolution overview of the entire map, sent during the handshake.
+    ///
+    /// `data` is `width × height` [`Tile`] values, row-major (row 0 = northernmost).
+    OverviewMapEvent {
+        width: u32,
+        height: u32,
+        data: Vec<Tile>,
+    },
+
     /// Sent by the server immediately on WebSocket connection, before `RegisterEvent`, to identify the server version.
     ///
     /// `version` is the server binary's `CARGO_PKG_VERSION` semver string (e.g. `"0.2.1"`).

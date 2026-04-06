@@ -4,7 +4,10 @@ use geo::BoundingRect;
 use rayon::prelude::*;
 
 use crate::progress::make_count_bar;
-use crate::{BBOX_MAX_LAT, BBOX_MAX_LON, BBOX_MIN_LAT, BBOX_MIN_LON, MAP_TILES_H, MAP_TILES_W};
+use crate::{
+    BBOX_MAX_LAT, BBOX_MAX_LON, BBOX_MIN_LAT, BBOX_MIN_LON, MAP_TILES_H, MAP_TILES_W,
+    OVERVIEW_TILES_H, OVERVIEW_TILES_W,
+};
 
 /// Rasterize a slice of land polygons into a row-major `Vec<Vec<u8>>` grid.
 ///
@@ -23,13 +26,23 @@ use crate::{BBOX_MAX_LAT, BBOX_MAX_LON, BBOX_MIN_LAT, BBOX_MIN_LON, MAP_TILES_H,
 /// **Third pass** — coast detection:  
 /// Any water cell adjacent (4-connected) to a land cell becomes `TILE_COAST`.
 pub fn rasterize(polygons: &[geo::geometry::Polygon<f64>]) -> Vec<Vec<Tile>> {
-    let w = MAP_TILES_W as usize;
-    let h = MAP_TILES_H as usize;
+    rasterize_at(polygons.iter(), polygons.len(), MAP_TILES_W as usize, MAP_TILES_H as usize)
+}
 
+pub fn rasterize_overview(polygons: &[&geo::geometry::Polygon<f64>]) -> Vec<Vec<Tile>> {
+    rasterize_at(polygons.iter().copied(), polygons.len(), OVERVIEW_TILES_W as usize, OVERVIEW_TILES_H as usize)
+}
+
+fn rasterize_at<'a>(
+    polygons: impl Iterator<Item = &'a geo::geometry::Polygon<f64>>,
+    count: usize,
+    w: usize,
+    h: usize,
+) -> Vec<Vec<Tile>> {
     // ── First pass: build scanline fill intervals ─────────────────────────────
     let mut fill_intervals: Vec<Vec<(usize, usize)>> = vec![Vec::new(); h];
-    let bar = make_count_bar(polygons.len() as u64, "polygons", 500);
-    for poly in polygons.iter() {
+    let bar = make_count_bar(count as u64, "polygons", 500);
+    for poly in polygons {
         scanline_fill_polygon(poly, w, h, &mut fill_intervals);
         bar.inc();
     }

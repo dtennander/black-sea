@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::Result;
-use black_sea_protocol::{GameEvent, MapGrid, Position, recv_event, send_event};
+use black_sea_protocol::{GameEvent, MapGrid, Position, Tile, recv_event, send_event};
 use tokio::net::TcpStream;
 use tokio::sync::broadcast;
 use tokio_tungstenite::WebSocketStream;
@@ -20,6 +20,13 @@ pub struct BoatEntry {
 }
 
 pub type BoatMap = Arc<Mutex<HashMap<u64, BoatEntry>>>;
+
+/// Pre-flattened overview map data shared across all client handlers.
+pub struct OverviewData {
+    pub width: u32,
+    pub height: u32,
+    pub data: Vec<Tile>,
+}
 
 /// A broadcast envelope wrapping a [`GameEvent`] with its sender's ID so we
 /// can avoid echoing events back to the originating client.
@@ -48,6 +55,7 @@ pub async fn handle(
     mut rx: broadcast::Receiver<Envelope>,
     boats: BoatMap,
     map: Arc<MapGrid>,
+    overview: Arc<OverviewData>,
     metres_per_tile: f32,
 ) -> Result<()> {
     let self_id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
@@ -118,6 +126,16 @@ pub async fn handle(
             tile_height: map.height,
             chunk_size: map.chunk_size,
             meters_per_tile: metres_per_tile,
+        },
+    )
+    .await?;
+
+    send_event(
+        &mut ws,
+        &GameEvent::OverviewMapEvent {
+            width: overview.width,
+            height: overview.height,
+            data: overview.data.clone(),
         },
     )
     .await?;
@@ -194,7 +212,8 @@ pub async fn handle(
                                 | GameEvent::WorldInfoEvent { .. }
                                 | GameEvent::NameEvent { .. }
                                 | GameEvent::ByeEvent { .. }
-                                | GameEvent::MapChunkResponse { .. } => continue,
+                                | GameEvent::MapChunkResponse { .. }
+                                | GameEvent::OverviewMapEvent { .. } => continue,
                             };
 
                             let _ = tx.send(Envelope {

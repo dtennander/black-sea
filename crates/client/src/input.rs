@@ -154,6 +154,13 @@ pub async fn handle_key(
     if key.kind != KeyEventKind::Press {
         return Ok(false);
     }
+
+    // While the map overview is open, any key closes it.
+    if app.show_map_overview {
+        app.show_map_overview = false;
+        return Ok(false);
+    }
+
     match key.code {
         KeyCode::Esc | KeyCode::Char('q') => {
             return Ok(true);
@@ -184,9 +191,13 @@ pub async fn handle_key(
         KeyCode::Enter => {
             if !app.input.is_empty() {
                 let text: String = app.input.drain(..).collect();
-                send_event(ws, &GameEvent::SayEvent { position: None, text: text.clone() })
-                    .await?;
-                app.push_bubble(app.cursor.clone(), text);
+                if text == "/map" {
+                    app.show_map_overview = true;
+                } else {
+                    send_event(ws, &GameEvent::SayEvent { position: None, text: text.clone() })
+                        .await?;
+                    app.push_bubble(app.cursor.clone(), text);
+                }
             }
         }
         KeyCode::Char(c) => app.input.push(c),
