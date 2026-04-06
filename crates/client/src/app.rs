@@ -287,6 +287,9 @@ pub async fn run(
     name: String,
 ) -> Result<()> {
     let mut app = App::new(name);
+    // We already verified compatibility before entering the game, so mark it
+    // as compatible immediately to avoid the "server version unknown" flicker.
+    app.update_status = UpdateStatus::Compatible { patch_available: None };
     let (tx, mut rx) = mpsc::channel::<AppMsg>(64);
 
     // Spawn a background task to check for the latest release on GitHub.
