@@ -96,6 +96,11 @@ pub fn coast_char(app: &App, wx: u32, wy: u32) -> &'static str {
 // ── Main render function ──────────────────────────────────────────────────────
 
 pub fn render(frame: &mut Frame, app: &App) {
+    if app.show_map_overview {
+        render_map_overview(frame, app);
+        return;
+    }
+
     if let UpdateStatus::Incompatible { server_version } = &app.update_status {
         let [world_area, warn_area, input_area] = Layout::vertical([
             Constraint::Min(0),
@@ -120,7 +125,7 @@ fn render_input_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         Span::raw(&app.input),
     ]);
     let widget = Paragraph::new(input_text)
-        .block(Block::bordered().title("Say (Enter to send, Esc to quit)"));
+        .block(Block::bordered().title("Say (Enter to send, Esc to quit, /map for map)"));
     frame.render_widget(widget, area);
 }
 
@@ -324,6 +329,95 @@ fn render_update_warning(frame: &mut Frame, server_version: &str, area: ratatui:
         area,
     );
 }
+
+// ── Map overview ─────────────────────────────────────────────────────────────
+
+fn render_map_overview(frame: &mut Frame, app: &App) {
+    let overview = match &app.overview {
+        Some(ov) => ov,
+        None => return,
+    };
+    let ov_w = overview.width as f64;
+    let ov_h = overview.height as f64;
+
+    // Map the player's world position into overview coordinates.
+    let (world_w, world_h) = match &app.world_info {
+        Some(wi) => (wi.tile_width as f64, wi.tile_height as f64),
+        None => return,
+    };
+
+    let title = format!(
+        "Map Overview  [{}, {}]  (Esc to close)",
+        app.cursor.x as u32, app.cursor.y as u32,
+    );
+
+    let canvas = Canvas::default()
+        .block(Block::bordered().title(title))
+        .x_bounds([0.0, ov_w])
+        .y_bounds([0.0, ov_h])
+        .paint(|ctx: &mut Context| {
+            draw_overview_terrain(ctx, overview);
+            draw_overview_player(ctx, app, ov_w, ov_h, world_w, world_h);
+        });
+
+    frame.render_widget(canvas, frame.area());
+}
+
+fn draw_overview_terrain(ctx: &mut Context, overview: &crate::app::OverviewMap) {
+    let w = overview.width;
+    let h = overview.height;
+    let h_f = h as f64;
+
+    for row in 0..h {
+        for col in 0..w {
+            let idx = (row * w + col) as usize;
+            let tile = overview.data[idx];
+            let canvas_x = col as f64;
+            let canvas_y = h_f - 1.0 - row as f64;
+            match tile {
+                Tile::Land => {
+                    ctx.print(
+                        canvas_x,
+                        canvas_y,
+                        Span::styled("#", Style::new().fg(Color::DarkGray)),
+                    );
+                }
+                Tile::Coast => {
+                    ctx.print(
+                        canvas_x,
+                        canvas_y,
+                        Span::styled(".", Style::new().fg(Color::Green)),
+                    );
+                }
+                Tile::Water => {}
+            }
+        }
+    }
+}
+
+fn draw_overview_player(
+    ctx: &mut Context,
+    app: &App,
+    ov_w: f64,
+    ov_h: f64,
+    world_w: f64,
+    world_h: f64,
+) {
+    // Scale world position to overview coordinates.
+    let ox = (app.cursor.x as f64 / world_w) * ov_w;
+    let oy = (app.cursor.y as f64 / world_h) * ov_h;
+    let canvas_y = ov_h - 1.0 - oy;
+    ctx.print(
+        ox,
+        canvas_y,
+        Span::styled(
+            "X",
+            Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        ),
+    );
+}
+
+// ── Chat bubbles ─────────────────────────────────────────────────────────────
 
 fn draw_bubbles(ctx: &mut Context, app: &App, world_to_canvas: &impl Fn(f32, f32) -> (f64, f64)) {
     for bubble in &app.bubbles {

@@ -21,6 +21,10 @@ pub const BBOX_MAX_LON: f64 = 20.00;
 pub const MAP_TILES_W: u32 = 8500;
 pub const MAP_TILES_H: u32 = 5500;
 
+/// Overview map size in tiles (1/20th of the full map).
+pub const OVERVIEW_TILES_W: u32 = 425;
+pub const OVERVIEW_TILES_H: u32 = 275;
+
 /// Chunk size the server advertises (square tiles).
 pub const CHUNK_SIZE: u32 = 50;
 
@@ -31,10 +35,17 @@ pub const METRES_PER_TILE: f32 = 20.0;
 /// At 8500 tiles over ~170 km each tile ≈ 20 m; `SIMPLIFY_EPSILON` ≈ 0.001°.
 const SIMPLIFY_EPSILON: f64 = 0.001;
 
-/// Download OSM land polygons and rasterize them into a [`MapGrid`].
+/// Minimum polygon area (in degrees²) to include in the overview map.
+/// At 425×275 tiles over 2.5°×1°, one overview pixel ≈ 0.000024 deg².
+/// 0.0004 deg² ≈ 16 overview pixels — filters small islets while keeping
+/// islands with recognizable shape.
+const OVERVIEW_MIN_AREA_DEG2: f64 = 0.0004;
+
+/// Download OSM land polygons and rasterize them into a full [`MapGrid`] and a
+/// low-resolution overview [`MapGrid`].
 ///
 /// Uses an ETag-based disk cache under `./osm-cache/` (or `BLACK_SEA_CACHE_DIR`).
-pub fn load_map() -> Result<MapGrid> {
+pub fn load_map() -> Result<(MapGrid, MapGrid)> {
     println!("[map] Downloading OSM land polygons...");
     let zip_bytes = download_land_polygons()?;
 
@@ -73,10 +84,30 @@ pub fn load_map() -> Result<MapGrid> {
     );
     let grid = raster::rasterize(&polygons);
 
-    Ok(MapGrid {
+    let overview_polygons: Vec<&geo::geometry::Polygon<f64>> = {
+        use geo::Area;
+        polygons
+            .iter()
+            .filter(|p| p.unsigned_area() >= OVERVIEW_MIN_AREA_DEG2)
+            .collect()
+    };
+    println!(
+        "[map] Rasterizing overview {}×{} grid ({} polygons after filtering small islands)...",
+        OVERVIEW_TILES_W, OVERVIEW_TILES_H, overview_polygons.len()
+    );
+    let overview_grid = raster::rasterize_overview(&overview_polygons);
+
+    let full = MapGrid {
         grid,
         width: MAP_TILES_W,
         height: MAP_TILES_H,
         chunk_size: CHUNK_SIZE,
-    })
+    };
+    let overview = MapGrid {
+        grid: overview_grid,
+        width: OVERVIEW_TILES_W,
+        height: OVERVIEW_TILES_H,
+        chunk_size: OVERVIEW_TILES_H, // single chunk — not used for overview
+    };
+    Ok((full, overview))
 }

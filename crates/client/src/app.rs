@@ -54,6 +54,13 @@ pub struct WorldInfo {
     pub chunk_size: u32,
 }
 
+/// Low-resolution overview of the entire map, received from the server.
+pub struct OverviewMap {
+    pub width: u32,
+    pub height: u32,
+    pub data: Vec<Tile>,
+}
+
 // ── Update notification state ─────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Default)]
@@ -97,6 +104,12 @@ pub struct App {
     pub chunk_requests: Vec<(u32, u32)>,
 
     pub update_status: UpdateStatus,
+
+    /// Low-resolution overview of the full map, sent by the server on connect.
+    pub overview: Option<OverviewMap>,
+
+    /// Whether the zoomed-out map overview is currently shown.
+    pub show_map_overview: bool,
 }
 
 impl App {
@@ -114,6 +127,8 @@ impl App {
             pending_chunks: HashSet::new(),
             chunk_requests: Vec::new(),
             update_status: UpdateStatus::Unknown,
+            overview: None,
+            show_map_overview: false,
         }
     }
 
@@ -448,6 +463,10 @@ fn handle_server_event(app: &mut App, event: GameEvent) {
                 }
                 _ => UpdateStatus::Incompatible { server_version: version },
             };
+        }
+
+        GameEvent::OverviewMapEvent { width, height, data } => {
+            app.overview = Some(OverviewMap { width, height, data });
         }
 
         // Client should never receive these — ignore.
