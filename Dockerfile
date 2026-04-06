@@ -2,7 +2,8 @@ FROM rust:alpine AS builder
 RUN apk add --no-cache musl-dev
 WORKDIR /app
 COPY . .
-RUN cargo build --release --bin server
+ARG CLIENT_VERSION=unknown
+RUN CLIENT_VERSION=${CLIENT_VERSION} cargo build --release --bin server
 
 FROM alpine:latest
 COPY --from=builder /app/target/release/server /server

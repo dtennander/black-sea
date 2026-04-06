@@ -35,9 +35,13 @@ jobs:
         id: slug
         run: echo "sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
+      - name: Extract client version
+        id: version
+        run: echo "version=$(git describe --tags --abbrev=0 | sed 's/^v//')" >> $GITHUB_OUTPUT
+
       - name: Build and Push Docker image
         run: |
-          docker build -t ghcr.io/dtennander/black-sea:${{ steps.slug.outputs.sha }} .
+          docker build --build-arg CLIENT_VERSION=${{ steps.version.outputs.version }} -t ghcr.io/dtennander/black-sea:${{ steps.slug.outputs.sha }} .
           docker push ghcr.io/dtennander/black-sea:${{ steps.slug.outputs.sha }}
 
       - name: Update kustomization.yaml newTag
