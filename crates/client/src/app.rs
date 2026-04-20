@@ -469,6 +469,9 @@ fn handle_server_event(app: &mut App, event: GameEvent) {
             app.overview = Some(OverviewMap { width, height, data });
         }
 
+        // Handled in a follow-up session — ignore for now.
+        GameEvent::AnchorPointsEvent { .. } => {}
+
         // Client should never receive these — ignore.
         GameEvent::RegisterEvent { .. } | GameEvent::MapChunkRequest { .. } => {}
     }

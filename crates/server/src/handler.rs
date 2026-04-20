@@ -224,7 +224,8 @@ pub async fn handle(
                                 | GameEvent::NameEvent { .. }
                                 | GameEvent::ByeEvent { .. }
                                 | GameEvent::MapChunkResponse { .. }
-                                | GameEvent::OverviewMapEvent { .. } => continue,
+                                | GameEvent::OverviewMapEvent { .. }
+                                | GameEvent::AnchorPointsEvent { .. } => continue,
                             };
 
                             let _ = tx.send(Envelope {

@@ -1,3 +1,4 @@
+pub mod coords;
 pub mod tiles;
 pub mod transport;
 
@@ -11,6 +12,19 @@ use serde::{Deserialize, Serialize};
 pub struct Position {
     pub x: f32,
     pub y: f32,
+}
+
+/// A named location in tile-space — typically a favourite anchoring spot.
+///
+/// Loaded by the server from a CSV at startup and broadcast to clients in
+/// [`GameEvent::AnchorPointsEvent`] during the handshake. `id` is assigned by
+/// the server (stable for a given CSV row order within a run).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnchorPoint {
+    pub id: u32,
+    pub name: String,
+    pub position: Position,
+    pub note: Option<String>,
 }
 
 /// The full wire protocol between client and server.
@@ -28,6 +42,7 @@ pub struct Position {
 /// | `ByeEvent` | Server → Client |
 /// | `MapChunkRequest` | Client → Server |
 /// | `MapChunkResponse` | Server → Client |
+/// | `AnchorPointsEvent` | Server → Client |
 /// | `MoveEvent` | Bidirectional (client omits auth `id`; server fills it) |
 /// | `SayEvent` | Bidirectional (client omits `position`; server fills it) |
 ///
@@ -100,6 +115,12 @@ pub enum GameEvent {
         height: u32,
         data: Vec<Tile>,
     },
+
+    /// Favourite anchoring points loaded from the server's CSV, sent once during the handshake.
+    ///
+    /// Positions are in tile-space; clients may render them on the overview map
+    /// and track which have been visited during the session.
+    AnchorPointsEvent { points: Vec<AnchorPoint> },
 
     /// Sent by the server immediately on WebSocket connection, before `RegisterEvent`, to identify the server version.
     ///

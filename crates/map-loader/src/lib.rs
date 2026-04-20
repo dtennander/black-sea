@@ -5,31 +5,17 @@ pub mod raster;
 
 use anyhow::Result;
 use black_sea_protocol::MapGrid;
+// World geometry constants live in the protocol crate — they're part of the
+// protocol-level contract. Re-exported here so existing callers keep working.
+pub use black_sea_protocol::coords::{
+    BBOX_MAX_LAT, BBOX_MAX_LON, BBOX_MIN_LAT, BBOX_MIN_LON, CHUNK_SIZE, MAP_TILES_H, MAP_TILES_W,
+    METRES_PER_TILE, OVERVIEW_TILES_H, OVERVIEW_TILES_W,
+};
 use rayon::prelude::*;
 
 use download::download_land_polygons;
 use parser::parse_shapefile_from_zip;
 use progress::make_count_bar;
-
-/// Bounding box for the Stockholm inner/mid archipelago (WGS-84).
-pub const BBOX_MIN_LAT: f64 = 58.80;
-pub const BBOX_MAX_LAT: f64 = 59.80;
-pub const BBOX_MIN_LON: f64 = 17.50;
-pub const BBOX_MAX_LON: f64 = 20.00;
-
-/// Total map size in tiles.
-pub const MAP_TILES_W: u32 = 8500;
-pub const MAP_TILES_H: u32 = 5500;
-
-/// Overview map size in tiles (1/20th of the full map).
-pub const OVERVIEW_TILES_W: u32 = 425;
-pub const OVERVIEW_TILES_H: u32 = 275;
-
-/// Chunk size the server advertises (square tiles).
-pub const CHUNK_SIZE: u32 = 50;
-
-/// Approximate metres per tile — passed to clients via [`GameEvent::WorldInfoEvent`].
-pub const METRES_PER_TILE: f32 = 20.0;
 
 /// Half a tile in degrees — detail finer than this is invisible in the output.
 /// At 8500 tiles over ~170 km each tile ≈ 20 m; `SIMPLIFY_EPSILON` ≈ 0.001°.
