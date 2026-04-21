@@ -64,10 +64,16 @@ pub enum GameEvent {
     RegisterEvent { name: String },
 
     /// A player said something. The `position` field is authoritative when set by the server.
-    SayEvent { position: Option<Position>, text: String },
+    SayEvent {
+        position: Option<Position>,
+        text: String,
+    },
 
     /// Sent by the server to a newly connected client to assign its ID and starting position.
-    HelloEvent { your_id: u64, start_position: Position },
+    HelloEvent {
+        your_id: u64,
+        start_position: Position,
+    },
 
     /// Sent by the server immediately after `HelloEvent` — full snapshot of all connected players.
     WorldStateEvent { boats: Vec<(u64, Position, String)> },
@@ -82,7 +88,6 @@ pub enum GameEvent {
     ByeEvent { id: u64 },
 
     // ── Map protocol ─────────────────────────────────────────────────────────
-
     /// Sent by the server right after `HelloEvent` to describe the map layout.
     ///
     /// - `tile_width` / `tile_height`: full map size in tiles.

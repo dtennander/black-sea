@@ -79,7 +79,9 @@ pub fn load_map() -> Result<(MapGrid, MapGrid)> {
     };
     println!(
         "[map] Rasterizing overview {}×{} grid ({} polygons after filtering small islands)...",
-        OVERVIEW_TILES_W, OVERVIEW_TILES_H, overview_polygons.len()
+        OVERVIEW_TILES_W,
+        OVERVIEW_TILES_H,
+        overview_polygons.len()
     );
     let overview_grid = raster::rasterize_overview(&overview_polygons);
 

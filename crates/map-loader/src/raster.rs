@@ -1,6 +1,6 @@
 use black_sea_protocol::Tile;
-use geo::geometry::Coord;
 use geo::BoundingRect;
+use geo::geometry::Coord;
 use rayon::prelude::*;
 
 use crate::progress::make_count_bar;
@@ -26,11 +26,21 @@ use crate::{
 /// **Third pass** — coast detection:  
 /// Any water cell adjacent (4-connected) to a land cell becomes `TILE_COAST`.
 pub fn rasterize(polygons: &[geo::geometry::Polygon<f64>]) -> Vec<Vec<Tile>> {
-    rasterize_at(polygons.iter(), polygons.len(), MAP_TILES_W as usize, MAP_TILES_H as usize)
+    rasterize_at(
+        polygons.iter(),
+        polygons.len(),
+        MAP_TILES_W as usize,
+        MAP_TILES_H as usize,
+    )
 }
 
 pub fn rasterize_overview(polygons: &[&geo::geometry::Polygon<f64>]) -> Vec<Vec<Tile>> {
-    rasterize_at(polygons.iter().copied(), polygons.len(), OVERVIEW_TILES_W as usize, OVERVIEW_TILES_H as usize)
+    rasterize_at(
+        polygons.iter().copied(),
+        polygons.len(),
+        OVERVIEW_TILES_W as usize,
+        OVERVIEW_TILES_H as usize,
+    )
 }
 
 fn rasterize_at<'a>(

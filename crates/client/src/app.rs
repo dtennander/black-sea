@@ -250,7 +250,8 @@ impl App {
     }
 
     pub fn expire_bubbles(&mut self) {
-        self.bubbles.retain(|b| b.received_at.elapsed() < BUBBLE_TTL);
+        self.bubbles
+            .retain(|b| b.received_at.elapsed() < BUBBLE_TTL);
     }
 
     // ── Tile lookup ───────────────────────────────────────────────────────────
@@ -292,9 +293,8 @@ async fn fetch_latest_version() -> Option<String> {
 
 // ── Game loop ─────────────────────────────────────────────────────────────────
 
-type ClientWs = tokio_tungstenite::WebSocketStream<
-    tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
->;
+type ClientWs =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 pub async fn run(
     terminal: &mut ratatui::DefaultTerminal,
@@ -304,7 +304,9 @@ pub async fn run(
     let mut app = App::new(name);
     // We already verified compatibility before entering the game, so mark it
     // as compatible immediately to avoid the "server version unknown" flicker.
-    app.update_status = UpdateStatus::Compatible { patch_available: None };
+    app.update_status = UpdateStatus::Compatible {
+        patch_available: None,
+    };
     let (tx, mut rx) = mpsc::channel::<AppMsg>(64);
 
     // Spawn a background task to check for the latest release on GitHub.
@@ -339,7 +341,14 @@ pub async fn run(
 
         // Drain buffered chunk requests.
         for (cx, cy) in app.chunk_requests.drain(..).collect::<Vec<_>>() {
-            send_event(ws, &GameEvent::MapChunkRequest { chunk_x: cx, chunk_y: cy }).await?;
+            send_event(
+                ws,
+                &GameEvent::MapChunkRequest {
+                    chunk_x: cx,
+                    chunk_y: cy,
+                },
+            )
+            .await?;
         }
 
         tokio::select! {
@@ -386,17 +395,33 @@ pub async fn run(
 
 fn handle_server_event(app: &mut App, event: GameEvent) {
     match event {
-        GameEvent::HelloEvent { your_id, start_position } => {
+        GameEvent::HelloEvent {
+            your_id,
+            start_position,
+        } => {
             app.my_id = Some(your_id);
             app.cursor = start_position;
         }
 
-        GameEvent::WorldInfoEvent { tile_width, tile_height, chunk_size, .. } => {
-            app.world_info = Some(WorldInfo { tile_width, tile_height, chunk_size });
+        GameEvent::WorldInfoEvent {
+            tile_width,
+            tile_height,
+            chunk_size,
+            ..
+        } => {
+            app.world_info = Some(WorldInfo {
+                tile_width,
+                tile_height,
+                chunk_size,
+            });
             app.ensure_chunks_loaded();
         }
 
-        GameEvent::MapChunkResponse { chunk_x, chunk_y, data } => {
+        GameEvent::MapChunkResponse {
+            chunk_x,
+            chunk_y,
+            data,
+        } => {
             app.pending_chunks.remove(&(chunk_x, chunk_y));
             app.loaded_chunks.insert((chunk_x, chunk_y), data);
         }
@@ -405,7 +430,11 @@ fn handle_server_event(app: &mut App, event: GameEvent) {
             for (id, position, name) in boats {
                 app.remote_boats.insert(
                     id,
-                    RemoteBoat { position, name, last_dir: Direction::Right },
+                    RemoteBoat {
+                        position,
+                        name,
+                        last_dir: Direction::Right,
+                    },
                 );
             }
         }
@@ -427,9 +456,17 @@ fn handle_server_event(app: &mut App, event: GameEvent) {
                 let dy = position.y - boat.position.y;
                 if dx.abs() > 0.0 || dy.abs() > 0.0 {
                     boat.last_dir = if dx.abs() >= dy.abs() {
-                        if dx > 0.0 { Direction::Right } else { Direction::Left }
+                        if dx > 0.0 {
+                            Direction::Right
+                        } else {
+                            Direction::Left
+                        }
                     } else {
-                        if dy > 0.0 { Direction::Down } else { Direction::Up }
+                        if dy > 0.0 {
+                            Direction::Down
+                        } else {
+                            Direction::Up
+                        }
                     };
                 }
                 boat.position = position;
@@ -455,18 +492,29 @@ fn handle_server_event(app: &mut App, event: GameEvent) {
         }
 
         GameEvent::ServerVersionEvent { version } => {
-            let own = Version::parse(env!("GIT_VERSION"))
-                .unwrap_or(Version::new(0, 0, 0));
+            let own = Version::parse(env!("GIT_VERSION")).unwrap_or(Version::new(0, 0, 0));
             app.update_status = match Version::parse(&version) {
                 Ok(srv) if srv.major == own.major && srv.minor == own.minor => {
-                    UpdateStatus::Compatible { patch_available: None }
+                    UpdateStatus::Compatible {
+                        patch_available: None,
+                    }
                 }
-                _ => UpdateStatus::Incompatible { server_version: version },
+                _ => UpdateStatus::Incompatible {
+                    server_version: version,
+                },
             };
         }
 
-        GameEvent::OverviewMapEvent { width, height, data } => {
-            app.overview = Some(OverviewMap { width, height, data });
+        GameEvent::OverviewMapEvent {
+            width,
+            height,
+            data,
+        } => {
+            app.overview = Some(OverviewMap {
+                width,
+                height,
+                data,
+            });
         }
 
         // Handled in a follow-up session — ignore for now.
@@ -614,5 +662,4 @@ mod tests {
         assert_eq!(app.bubbles.len(), 1);
         assert_eq!(app.bubbles[0].text, "fresh");
     }
-
 }

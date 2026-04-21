@@ -1,9 +1,9 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
-use black_sea_protocol::{GameEvent, MapGrid, Position, Tile, recv_event, send_event};
+use black_sea_protocol::{AnchorPoint, GameEvent, MapGrid, Position, Tile, recv_event, send_event};
 use tokio::net::TcpStream;
 use tokio::sync::broadcast;
 use tokio_tungstenite::WebSocketStream;
@@ -57,6 +57,7 @@ pub async fn handle(
     boats: BoatMap,
     map: Arc<MapGrid>,
     overview: Arc<OverviewData>,
+    anchor_points: Arc<Vec<AnchorPoint>>,
     metres_per_tile: f32,
 ) -> Result<()> {
     let self_id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
@@ -137,6 +138,14 @@ pub async fn handle(
             width: overview.width,
             height: overview.height,
             data: overview.data.clone(),
+        },
+    )
+    .await?;
+
+    send_event(
+        &mut ws,
+        &GameEvent::AnchorPointsEvent {
+            points: anchor_points.as_ref().clone(),
         },
     )
     .await?;

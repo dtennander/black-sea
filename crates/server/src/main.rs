@@ -1,12 +1,14 @@
+mod anchorings;
 mod handler;
 mod metrics;
 mod spawn;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
-use black_sea_protocol::{MapGrid, Tile};
+use black_sea_protocol::{AnchorPoint, MapGrid, Tile};
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tokio_tungstenite::accept_async;
@@ -28,8 +30,25 @@ async fn main() -> Result<()> {
     let overview: Arc<OverviewData> = Arc::new(OverviewData {
         width: overview_grid.width,
         height: overview_grid.height,
-        data: overview_grid.grid.into_iter().flatten().collect::<Vec<Tile>>(),
+        data: overview_grid
+            .grid
+            .into_iter()
+            .flatten()
+            .collect::<Vec<Tile>>(),
     });
+
+    let anchorings_path = PathBuf::from(
+        std::env::var("BLACK_SEA_ANCHORINGS").unwrap_or_else(|_| "anchorings.csv".to_string()),
+    );
+    let anchor_points: Arc<Vec<AnchorPoint>> = Arc::new(
+        anchorings::load_anchorings(&anchorings_path).unwrap_or_else(|e| {
+            eprintln!(
+                "[anchorings] Failed to load {}: {e}",
+                anchorings_path.display()
+            );
+            Vec::new()
+        }),
+    );
 
     let listener = TcpListener::bind("0.0.0.0:7456").await?;
     let (tx, _) = broadcast::channel::<Envelope>(64);
@@ -54,10 +73,13 @@ async fn main() -> Result<()> {
         let boats = Arc::clone(&boats);
         let map = Arc::clone(&map_grid);
         let ov = Arc::clone(&overview);
+        let anchors = Arc::clone(&anchor_points);
         tokio::spawn(async move {
             match accept_async(socket).await {
                 Ok(ws) => {
-                    if let Err(e) = handle(ws, tx, rx, boats, map, ov, METRES_PER_TILE).await {
+                    if let Err(e) =
+                        handle(ws, tx, rx, boats, map, ov, anchors, METRES_PER_TILE).await
+                    {
                         eprintln!("Error handling connection from {addr}: {e}");
                     }
                 }
