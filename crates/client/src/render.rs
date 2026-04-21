@@ -1,4 +1,5 @@
 use black_sea_protocol::Tile;
+use black_sea_protocol::coords::{MAP_TILES_H, MAP_TILES_W};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Color, Modifier, Style};
@@ -340,15 +341,32 @@ fn render_map_overview(frame: &mut Frame, app: &App) {
     let ov_w = overview.width as f64;
     let ov_h = overview.height as f64;
 
-    // Map the player's world position into overview coordinates.
-    let (world_w, world_h) = match &app.world_info {
-        Some(wi) => (wi.tile_width as f64, wi.tile_height as f64),
-        None => return,
-    };
+    // Anchor positions are in full-map tile-space; scale to overview tile-space
+    // using the protocol-level geometry constants.
+    let world_w = MAP_TILES_W as f64;
+    let world_h = MAP_TILES_H as f64;
+
+    let selected_line = app
+        .selected_anchor
+        .and_then(|i| app.anchor_points.get(i))
+        .map(|a| {
+            let visited = if app.visited_anchors.contains(&a.id) {
+                " [visited]"
+            } else {
+                ""
+            };
+            match a.note.as_deref() {
+                Some(note) if !note.is_empty() => {
+                    format!("  · {}{} — {}", a.name, visited, note)
+                }
+                _ => format!("  · {}{}", a.name, visited),
+            }
+        })
+        .unwrap_or_default();
 
     let title = format!(
-        "Map Overview  [{}, {}]  (Esc to close)",
-        app.cursor.x as u32, app.cursor.y as u32,
+        "Map Overview  [{}, {}]  (Tab: cycle anchors · Enter: mark visited · Esc: close){}",
+        app.cursor.x as u32, app.cursor.y as u32, selected_line,
     );
 
     let canvas = Canvas::default()
@@ -357,6 +375,7 @@ fn render_map_overview(frame: &mut Frame, app: &App) {
         .y_bounds([0.0, ov_h])
         .paint(|ctx: &mut Context| {
             draw_overview_terrain(ctx, overview);
+            draw_overview_anchors(ctx, app, ov_w, ov_h, world_w, world_h);
             draw_overview_player(ctx, app, ov_w, ov_h, world_w, world_h);
         });
 
@@ -415,6 +434,35 @@ fn draw_overview_player(
             Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD),
         ),
     );
+}
+
+fn draw_overview_anchors(
+    ctx: &mut Context,
+    app: &App,
+    ov_w: f64,
+    ov_h: f64,
+    world_w: f64,
+    world_h: f64,
+) {
+    for (i, anchor) in app.anchor_points.iter().enumerate() {
+        let ox = (anchor.position.x as f64 / world_w) * ov_w;
+        let oy = (anchor.position.y as f64 / world_h) * ov_h;
+        let canvas_y = ov_h - 1.0 - oy;
+
+        let visited = app.visited_anchors.contains(&anchor.id);
+        let selected = app.selected_anchor == Some(i);
+        let style = match (visited, selected) {
+            (true, true) => Style::new()
+                .fg(Color::DarkGray)
+                .add_modifier(Modifier::REVERSED),
+            (true, false) => Style::new().fg(Color::DarkGray),
+            (false, true) => Style::new()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD | Modifier::REVERSED),
+            (false, false) => Style::new().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+        };
+        ctx.print(ox, canvas_y, Span::styled("\u{2693}", style));
+    }
 }
 
 // ── Chat bubbles ─────────────────────────────────────────────────────────────

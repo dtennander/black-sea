@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use black_sea_protocol::{GameEvent, Position, Tile, recv_event, send_event};
+use black_sea_protocol::{AnchorPoint, GameEvent, Position, Tile, recv_event, send_event};
 use crossterm::event::KeyEvent;
 use semver::Version;
 use tokio::sync::mpsc;
@@ -110,6 +110,15 @@ pub struct App {
 
     /// Whether the zoomed-out map overview is currently shown.
     pub show_map_overview: bool,
+
+    /// Favourite anchoring points received from the server during the handshake.
+    pub anchor_points: Vec<AnchorPoint>,
+
+    /// IDs of anchors marked as visited in this session. Not persisted.
+    pub visited_anchors: HashSet<u32>,
+
+    /// Index into `anchor_points` of the currently selected anchor on the overview.
+    pub selected_anchor: Option<usize>,
 }
 
 impl App {
@@ -129,6 +138,39 @@ impl App {
             update_status: UpdateStatus::Unknown,
             overview: None,
             show_map_overview: false,
+            anchor_points: Vec::new(),
+            visited_anchors: HashSet::new(),
+            selected_anchor: None,
+        }
+    }
+
+    // ── Anchor points ─────────────────────────────────────────────────────────
+
+    /// Mark an anchor as visited. Idempotent.
+    pub fn mark_anchor_visited(&mut self, id: u32) {
+        self.visited_anchors.insert(id);
+    }
+
+    /// Cycle the selected anchor forward. Returns to the first after the last,
+    /// and resets to `None` if there are no anchors.
+    pub fn cycle_selected_anchor(&mut self) {
+        if self.anchor_points.is_empty() {
+            self.selected_anchor = None;
+            return;
+        }
+        self.selected_anchor = Some(match self.selected_anchor {
+            None => 0,
+            Some(i) => (i + 1) % self.anchor_points.len(),
+        });
+    }
+
+    /// Mark the currently selected anchor as visited, if any.
+    pub fn mark_selected_anchor_visited(&mut self) {
+        if let Some(idx) = self.selected_anchor
+            && let Some(a) = self.anchor_points.get(idx)
+        {
+            let id = a.id;
+            self.mark_anchor_visited(id);
         }
     }
 
@@ -250,7 +292,8 @@ impl App {
     }
 
     pub fn expire_bubbles(&mut self) {
-        self.bubbles.retain(|b| b.received_at.elapsed() < BUBBLE_TTL);
+        self.bubbles
+            .retain(|b| b.received_at.elapsed() < BUBBLE_TTL);
     }
 
     // ── Tile lookup ───────────────────────────────────────────────────────────
@@ -292,9 +335,8 @@ async fn fetch_latest_version() -> Option<String> {
 
 // ── Game loop ─────────────────────────────────────────────────────────────────
 
-type ClientWs = tokio_tungstenite::WebSocketStream<
-    tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
->;
+type ClientWs =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 pub async fn run(
     terminal: &mut ratatui::DefaultTerminal,
@@ -304,7 +346,9 @@ pub async fn run(
     let mut app = App::new(name);
     // We already verified compatibility before entering the game, so mark it
     // as compatible immediately to avoid the "server version unknown" flicker.
-    app.update_status = UpdateStatus::Compatible { patch_available: None };
+    app.update_status = UpdateStatus::Compatible {
+        patch_available: None,
+    };
     let (tx, mut rx) = mpsc::channel::<AppMsg>(64);
 
     // Spawn a background task to check for the latest release on GitHub.
@@ -339,7 +383,14 @@ pub async fn run(
 
         // Drain buffered chunk requests.
         for (cx, cy) in app.chunk_requests.drain(..).collect::<Vec<_>>() {
-            send_event(ws, &GameEvent::MapChunkRequest { chunk_x: cx, chunk_y: cy }).await?;
+            send_event(
+                ws,
+                &GameEvent::MapChunkRequest {
+                    chunk_x: cx,
+                    chunk_y: cy,
+                },
+            )
+            .await?;
         }
 
         tokio::select! {
@@ -386,17 +437,33 @@ pub async fn run(
 
 fn handle_server_event(app: &mut App, event: GameEvent) {
     match event {
-        GameEvent::HelloEvent { your_id, start_position } => {
+        GameEvent::HelloEvent {
+            your_id,
+            start_position,
+        } => {
             app.my_id = Some(your_id);
             app.cursor = start_position;
         }
 
-        GameEvent::WorldInfoEvent { tile_width, tile_height, chunk_size, .. } => {
-            app.world_info = Some(WorldInfo { tile_width, tile_height, chunk_size });
+        GameEvent::WorldInfoEvent {
+            tile_width,
+            tile_height,
+            chunk_size,
+            ..
+        } => {
+            app.world_info = Some(WorldInfo {
+                tile_width,
+                tile_height,
+                chunk_size,
+            });
             app.ensure_chunks_loaded();
         }
 
-        GameEvent::MapChunkResponse { chunk_x, chunk_y, data } => {
+        GameEvent::MapChunkResponse {
+            chunk_x,
+            chunk_y,
+            data,
+        } => {
             app.pending_chunks.remove(&(chunk_x, chunk_y));
             app.loaded_chunks.insert((chunk_x, chunk_y), data);
         }
@@ -405,7 +472,11 @@ fn handle_server_event(app: &mut App, event: GameEvent) {
             for (id, position, name) in boats {
                 app.remote_boats.insert(
                     id,
-                    RemoteBoat { position, name, last_dir: Direction::Right },
+                    RemoteBoat {
+                        position,
+                        name,
+                        last_dir: Direction::Right,
+                    },
                 );
             }
         }
@@ -427,9 +498,17 @@ fn handle_server_event(app: &mut App, event: GameEvent) {
                 let dy = position.y - boat.position.y;
                 if dx.abs() > 0.0 || dy.abs() > 0.0 {
                     boat.last_dir = if dx.abs() >= dy.abs() {
-                        if dx > 0.0 { Direction::Right } else { Direction::Left }
+                        if dx > 0.0 {
+                            Direction::Right
+                        } else {
+                            Direction::Left
+                        }
                     } else {
-                        if dy > 0.0 { Direction::Down } else { Direction::Up }
+                        if dy > 0.0 {
+                            Direction::Down
+                        } else {
+                            Direction::Up
+                        }
                     };
                 }
                 boat.position = position;
@@ -455,22 +534,35 @@ fn handle_server_event(app: &mut App, event: GameEvent) {
         }
 
         GameEvent::ServerVersionEvent { version } => {
-            let own = Version::parse(env!("GIT_VERSION"))
-                .unwrap_or(Version::new(0, 0, 0));
+            let own = Version::parse(env!("GIT_VERSION")).unwrap_or(Version::new(0, 0, 0));
             app.update_status = match Version::parse(&version) {
                 Ok(srv) if srv.major == own.major && srv.minor == own.minor => {
-                    UpdateStatus::Compatible { patch_available: None }
+                    UpdateStatus::Compatible {
+                        patch_available: None,
+                    }
                 }
-                _ => UpdateStatus::Incompatible { server_version: version },
+                _ => UpdateStatus::Incompatible {
+                    server_version: version,
+                },
             };
         }
 
-        GameEvent::OverviewMapEvent { width, height, data } => {
-            app.overview = Some(OverviewMap { width, height, data });
+        GameEvent::OverviewMapEvent {
+            width,
+            height,
+            data,
+        } => {
+            app.overview = Some(OverviewMap {
+                width,
+                height,
+                data,
+            });
         }
 
-        // Handled in a follow-up session — ignore for now.
-        GameEvent::AnchorPointsEvent { .. } => {}
+        GameEvent::AnchorPointsEvent { points } => {
+            app.anchor_points = points;
+            app.selected_anchor = None;
+        }
 
         // Client should never receive these — ignore.
         GameEvent::RegisterEvent { .. } | GameEvent::MapChunkRequest { .. } => {}
@@ -615,4 +707,100 @@ mod tests {
         assert_eq!(app.bubbles[0].text, "fresh");
     }
 
+    // ── Anchor points ─────────────────────────────────────────────────────────
+
+    fn anchor(id: u32, name: &str) -> AnchorPoint {
+        AnchorPoint {
+            id,
+            name: name.to_string(),
+            position: Position {
+                x: id as f32 * 10.0,
+                y: id as f32 * 10.0,
+            },
+            note: None,
+        }
+    }
+
+    #[test]
+    fn anchor_points_event_populates_list() {
+        let mut app = App::new("test".into());
+        assert!(app.anchor_points.is_empty());
+        let points = vec![anchor(1, "Sandhamn"), anchor(2, "Utö")];
+        handle_server_event(&mut app, GameEvent::AnchorPointsEvent { points });
+        assert_eq!(app.anchor_points.len(), 2);
+        assert_eq!(app.anchor_points[0].name, "Sandhamn");
+        assert_eq!(app.anchor_points[1].id, 2);
+        assert!(app.visited_anchors.is_empty());
+        assert!(app.selected_anchor.is_none());
+    }
+
+    #[test]
+    fn anchor_points_event_replaces_existing() {
+        let mut app = App::new("test".into());
+        app.anchor_points = vec![anchor(99, "stale")];
+        app.selected_anchor = Some(0);
+        handle_server_event(
+            &mut app,
+            GameEvent::AnchorPointsEvent {
+                points: vec![anchor(1, "fresh")],
+            },
+        );
+        assert_eq!(app.anchor_points.len(), 1);
+        assert_eq!(app.anchor_points[0].id, 1);
+        assert!(app.selected_anchor.is_none());
+    }
+
+    #[test]
+    fn mark_anchor_visited_adds_to_set() {
+        let mut app = App::new("test".into());
+        app.mark_anchor_visited(7);
+        assert!(app.visited_anchors.contains(&7));
+    }
+
+    #[test]
+    fn mark_anchor_visited_is_idempotent() {
+        let mut app = App::new("test".into());
+        app.mark_anchor_visited(7);
+        app.mark_anchor_visited(7);
+        app.mark_anchor_visited(7);
+        assert_eq!(app.visited_anchors.len(), 1);
+        assert!(app.visited_anchors.contains(&7));
+    }
+
+    #[test]
+    fn cycle_selected_anchor_with_empty_is_noop() {
+        let mut app = App::new("test".into());
+        app.cycle_selected_anchor();
+        assert!(app.selected_anchor.is_none());
+    }
+
+    #[test]
+    fn cycle_selected_anchor_wraps_around() {
+        let mut app = App::new("test".into());
+        app.anchor_points = vec![anchor(1, "a"), anchor(2, "b")];
+        app.cycle_selected_anchor();
+        assert_eq!(app.selected_anchor, Some(0));
+        app.cycle_selected_anchor();
+        assert_eq!(app.selected_anchor, Some(1));
+        app.cycle_selected_anchor();
+        assert_eq!(app.selected_anchor, Some(0));
+    }
+
+    #[test]
+    fn mark_selected_anchor_visited_uses_selection() {
+        let mut app = App::new("test".into());
+        app.anchor_points = vec![anchor(1, "a"), anchor(2, "b")];
+        app.selected_anchor = Some(1);
+        app.mark_selected_anchor_visited();
+        assert!(app.visited_anchors.contains(&2));
+        assert!(!app.visited_anchors.contains(&1));
+    }
+
+    #[test]
+    fn mark_selected_anchor_visited_without_selection_is_noop() {
+        let mut app = App::new("test".into());
+        app.anchor_points = vec![anchor(1, "a")];
+        app.mark_selected_anchor_visited();
+        assert!(app.visited_anchors.is_empty());
+    }
 }

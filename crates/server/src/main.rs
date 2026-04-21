@@ -28,7 +28,11 @@ async fn main() -> Result<()> {
     let overview: Arc<OverviewData> = Arc::new(OverviewData {
         width: overview_grid.width,
         height: overview_grid.height,
-        data: overview_grid.grid.into_iter().flatten().collect::<Vec<Tile>>(),
+        data: overview_grid
+            .grid
+            .into_iter()
+            .flatten()
+            .collect::<Vec<Tile>>(),
     });
 
     let listener = TcpListener::bind("0.0.0.0:7456").await?;

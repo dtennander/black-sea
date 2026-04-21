@@ -113,7 +113,9 @@ pub async fn serve_metrics(addr: &str) -> Result<()> {
                         let encoder = TextEncoder::new();
                         let metric_families = REGISTRY.gather();
                         let mut body = Vec::new();
-                        encoder.encode(&metric_families, &mut body).unwrap_or_default();
+                        encoder
+                            .encode(&metric_families, &mut body)
+                            .unwrap_or_default();
                         Ok::<Response<Full<Bytes>>, std::convert::Infallible>(
                             Response::builder()
                                 .header("Content-Type", encoder.format_type())

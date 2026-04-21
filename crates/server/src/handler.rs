@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use black_sea_protocol::{GameEvent, MapGrid, Position, Tile, recv_event, send_event};

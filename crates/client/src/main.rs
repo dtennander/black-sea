@@ -11,9 +11,8 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
 use input::prompt_name;
 
-type ClientWs = tokio_tungstenite::WebSocketStream<
-    tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
->;
+type ClientWs =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 const VERSION_TIMEOUT_SECS: u64 = 5;
 
@@ -32,12 +31,16 @@ async fn check_server_version(ws: &mut ClientWs) -> Result<CompatResult> {
                         Ok(srv) if srv.major == own.major && srv.minor == own.minor => {
                             CompatResult::Compatible
                         }
-                        _ => CompatResult::Incompatible { server_version: version },
+                        _ => CompatResult::Incompatible {
+                            server_version: version,
+                        },
                     });
                 }
                 Some(_) => continue,
                 None => {
-                    return Err(anyhow::anyhow!("Server disconnected before version exchange"))
+                    return Err(anyhow::anyhow!(
+                        "Server disconnected before version exchange"
+                    ));
                 }
             }
         }

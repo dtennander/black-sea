@@ -10,8 +10,8 @@
 /// - [`make_download_bar`] — byte-transfer style with an optional spinner for unknown sizes.
 use indicatif::{ProgressBar, ProgressStyle};
 use std::io::IsTerminal;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 fn is_tty() -> bool {

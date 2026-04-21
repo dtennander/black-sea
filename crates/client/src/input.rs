@@ -1,6 +1,6 @@
 use anyhow::Result;
 use black_sea_protocol::{GameEvent, send_event};
-use crossterm::event::{Event, KeyCode, KeyEventKind, self};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Color, Modifier, Style};
@@ -10,9 +10,8 @@ use std::time::Duration;
 
 use crate::app::{App, CURSOR_STEP};
 
-type ClientWs = tokio_tungstenite::WebSocketStream<
-    tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
->;
+type ClientWs =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 // ── Incompatibility screen ────────────────────────────────────────────────────
 
@@ -72,8 +71,8 @@ fn render_incompatible_screen(frame: &mut Frame, server_version: &str) {
         )),
     ];
 
-    let widget = Paragraph::new(content)
-        .block(Block::bordered().title("Update required — cannot connect"));
+    let widget =
+        Paragraph::new(content).block(Block::bordered().title("Update required — cannot connect"));
     frame.render_widget(widget, center);
 }
 
@@ -155,9 +154,14 @@ pub async fn handle_key(
         return Ok(false);
     }
 
-    // While the map overview is open, any key closes it.
+    // While the map overview is open: Tab cycles anchors, Enter marks the selected
+    // anchor as visited. Any other key closes the overlay.
     if app.show_map_overview {
-        app.show_map_overview = false;
+        match key.code {
+            KeyCode::Tab => app.cycle_selected_anchor(),
+            KeyCode::Enter => app.mark_selected_anchor_visited(),
+            _ => app.show_map_overview = false,
+        }
         return Ok(false);
     }
 
@@ -194,8 +198,14 @@ pub async fn handle_key(
                 if text == "/map" {
                     app.show_map_overview = true;
                 } else {
-                    send_event(ws, &GameEvent::SayEvent { position: None, text: text.clone() })
-                        .await?;
+                    send_event(
+                        ws,
+                        &GameEvent::SayEvent {
+                            position: None,
+                            text: text.clone(),
+                        },
+                    )
+                    .await?;
                     app.push_bubble(app.cursor.clone(), text);
                 }
             }
