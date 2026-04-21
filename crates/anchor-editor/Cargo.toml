@@ -1,0 +1,15 @@
+[package]
+name = "anchor-editor"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "anchor-editor"
+path = "src/main.rs"
+
+[dependencies]
+black-sea-protocol = { path = "../protocol" }
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
