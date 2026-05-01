@@ -202,7 +202,7 @@ fn render_world(frame: &mut Frame, app: &App, world_area: ratatui::layout::Rect)
             );
             draw_own_boat(ctx, &own_glyphs, own_cx, own_cy);
             draw_offscreen_indicators(ctx, app, &world_to_canvas, canvas_w, canvas_h);
-            draw_bubbles(ctx, app, &world_to_canvas);
+            draw_bubbles(ctx, app, &world_to_canvas, canvas_w, canvas_h);
         });
 
     frame.render_widget(canvas, world_area);
@@ -494,7 +494,13 @@ fn draw_overview_anchors(
 
 // ── Chat bubbles ─────────────────────────────────────────────────────────────
 
-fn draw_bubbles(ctx: &mut Context, app: &App, world_to_canvas: &impl Fn(f32, f32) -> (f64, f64)) {
+fn draw_bubbles(
+    ctx: &mut Context,
+    app: &App,
+    world_to_canvas: &impl Fn(f32, f32) -> (f64, f64),
+    canvas_w: f64,
+    canvas_h: f64,
+) {
     for bubble in &app.bubbles {
         let (bx, by) = world_to_canvas(bubble.position.x, bubble.position.y);
         let age = bubble.received_at.elapsed().as_secs_f64();
@@ -503,11 +509,15 @@ fn draw_bubbles(ctx: &mut Context, app: &App, world_to_canvas: &impl Fn(f32, f32
         } else {
             Color::DarkGray
         };
-        ctx.print(
-            bx,
-            by + BUBBLE_OFFSET as f64,
-            Span::styled(format!("[ {} ]", bubble.text), Style::new().fg(color)),
-        );
+        let bubble_text = format!("[ {} ]", bubble.text);
+        let bubble_text_len = bubble_text.len();
+        let render_y = if by + BUBBLE_OFFSET as f64 > canvas_h {
+            by - BUBBLE_OFFSET as f64
+        } else {
+            by + BUBBLE_OFFSET as f64
+        };
+        let render_x = bx.clamp(0.0, (canvas_w - bubble_text_len as f64).max(0.0));
+        ctx.print(render_x, render_y, Span::styled(bubble_text, Style::new().fg(color)));
     }
 }
 
