@@ -48,12 +48,16 @@ fn load_anchor_points(path: &str) -> Vec<AnchorPoint> {
                 })
         })
         .collect();
-    println!("[anchors] Loaded {} anchor points from {path}", points.len());
+    println!(
+        "[anchors] Loaded {} anchor points from {path}",
+        points.len()
+    );
     points
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    println!("Starting server on version {}", env!("CLIENT_VERSION"));
     let (full_grid, overview_grid) = black_sea_map_loader::load_map()?;
     let map_grid: Arc<MapGrid> = Arc::new(full_grid);
     println!(
@@ -64,7 +68,11 @@ async fn main() -> Result<()> {
     let overview: Arc<OverviewData> = Arc::new(OverviewData {
         width: overview_grid.width,
         height: overview_grid.height,
-        data: overview_grid.grid.into_iter().flatten().collect::<Vec<Tile>>(),
+        data: overview_grid
+            .grid
+            .into_iter()
+            .flatten()
+            .collect::<Vec<Tile>>(),
     });
 
     let anchor_points: Arc<Vec<AnchorPoint>> = Arc::new(load_anchor_points("anchorings.csv"));
@@ -96,7 +104,9 @@ async fn main() -> Result<()> {
         tokio::spawn(async move {
             match accept_async(socket).await {
                 Ok(ws) => {
-                    if let Err(e) = handle(ws, tx, rx, boats, map, ov, anchors, METRES_PER_TILE).await {
+                    if let Err(e) =
+                        handle(ws, tx, rx, boats, map, ov, anchors, METRES_PER_TILE).await
+                    {
                         eprintln!("Error handling connection from {addr}: {e}");
                     }
                 }
