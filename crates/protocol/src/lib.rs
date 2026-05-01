@@ -130,4 +130,8 @@ pub enum GameEvent {
     /// **Must remain the last variant** — bincode encodes enum variants by index, so
     /// appending here preserves all existing discriminants.
     ServerVersionEvent { version: String },
+
+    /// Server → Client. Sent during handshake (visited_id = None) and each time
+    /// the player reaches their current target anchor.
+    NewAnchorEvent { visited_id: Option<u32>, next: Option<AnchorPoint> },
 }

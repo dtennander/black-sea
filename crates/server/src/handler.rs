@@ -202,17 +202,41 @@ pub async fn handle(
                                         metrics::INVALID_MOVES_TOTAL.inc();
                                         continue; // silently drop invalid moves
                                     }
-                                    let mut m = boats.lock().unwrap();
-                                    if let Some(entry) = m.get_mut(&self_id) {
-                                        let dx = (entry.position.x - position.x) as f64;
-                                        let dy = (entry.position.y - position.y) as f64;
-                                        let tiles = (dx * dx + dy * dy).sqrt();
-                                        // Each tile is 20m; 1 nautical mile = 1852m
-                                        let nm = tiles * 20.0 / 1852.0;
-                                        metrics::NAUTICAL_MILES_SAILED.inc_by((nm * 1000.0) as u64);
-                                        entry.position = position.clone();
-                                    }
+                                    {
+                                        let mut m = boats.lock().unwrap();
+                                        if let Some(entry) = m.get_mut(&self_id) {
+                                            let dx = (entry.position.x - position.x) as f64;
+                                            let dy = (entry.position.y - position.y) as f64;
+                                            let tiles = (dx * dx + dy * dy).sqrt();
+                                            // Each tile is 20m; 1 nautical mile = 1852m
+                                            let nm = tiles * 20.0 / 1852.0;
+                                            metrics::NAUTICAL_MILES_SAILED
+                                                .inc_by((nm * 1000.0) as u64);
+                                            entry.position = position.clone();
+                                        }
+                                    } // MutexGuard dropped here, before any .await
                                     metrics::MOVES_TOTAL.inc();
+
+                                    // Check if the player is within 15 tiles of the current target anchor.
+                                    if let Some(target) = anchor_points.get(next_anchor_idx) {
+                                        let dx = target.position.x - position.x;
+                                        let dy = target.position.y - position.y;
+                                        if dx.hypot(dy) <= 15.0 {
+                                            let reached_id = target.id;
+                                            next_anchor_idx += 1;
+                                            send_event(
+                                                &mut ws,
+                                                &GameEvent::NewAnchorEvent {
+                                                    visited_id: Some(reached_id),
+                                                    next: anchor_points
+                                                        .get(next_anchor_idx)
+                                                        .cloned(),
+                                                },
+                                            )
+                                            .await?;
+                                        }
+                                    }
+
                                     GameEvent::MoveEvent { id: self_id, position }
                                 }
 

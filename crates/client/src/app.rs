@@ -246,11 +246,6 @@ impl App {
             self.ensure_chunks_loaded();
         }
 
-        if let Some(name) = self.check_anchor_visits() {
-            let pos = self.cursor.clone();
-            self.push_bubble(pos, format!("You have reached {}!", name));
-        }
-
         true
     }
 
@@ -266,22 +261,6 @@ impl App {
                 da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
             })
             .map(|(i, _)| i)
-    }
-
-    /// Check if the cursor is within 15 tiles of any unvisited anchor point.
-    /// Returns the name of the first newly-visited anchor, if any.
-    pub fn check_anchor_visits(&mut self) -> Option<String> {
-        for anchor in &self.anchor_points {
-            if self.visited_anchors.contains(&anchor.id) {
-                continue;
-            }
-            let dist = (anchor.position.x - self.cursor.x).hypot(anchor.position.y - self.cursor.y);
-            if dist <= 15.0 {
-                self.visited_anchors.insert(anchor.id);
-                return Some(anchor.name.clone());
-            }
-        }
-        None
     }
 
     // ── Chat bubbles ──────────────────────────────────────────────────────────
@@ -562,8 +541,28 @@ fn handle_server_event(app: &mut App, event: GameEvent) {
             });
         }
 
-        GameEvent::AnchorPointsEvent { points } => {
-            app.anchor_points = points;
+        // AnchorPointsEvent is no longer sent by the server; kept as a no-op for backward compat.
+        GameEvent::AnchorPointsEvent { .. } => {}
+
+        GameEvent::NewAnchorEvent { visited_id, next } => {
+            if let Some(id) = visited_id {
+                // Find the anchor name before inserting so we can show a bubble.
+                let anchor_name = app
+                    .anchor_points
+                    .iter()
+                    .find(|a| a.id == id)
+                    .map(|a| a.name.clone());
+                app.visited_anchors.insert(id);
+                if let Some(name) = anchor_name {
+                    let pos = app.cursor.clone();
+                    app.push_bubble(pos, format!("You have reached {}!", name));
+                }
+            }
+            if let Some(anchor) = next {
+                if !app.anchor_points.iter().any(|a| a.id == anchor.id) {
+                    app.anchor_points.push(anchor);
+                }
+            }
         }
 
         // Client should never receive these — ignore.

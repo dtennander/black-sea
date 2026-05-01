@@ -13,6 +13,8 @@ black-sea-map-loader = { path = "../map-loader" }
 tokio = { version = "1.50.0", features = ["full"] }
 tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
 anyhow = "1.0.102"
+csv = "1"
+serde = { version = "1", features = ["derive"] }
 rand = "0.9"
 prometheus = "0.13"
 lazy_static = "1.5"
