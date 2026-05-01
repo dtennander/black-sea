@@ -494,6 +494,26 @@ fn draw_overview_anchors(
 
 // ── Chat bubbles ─────────────────────────────────────────────────────────────
 
+/// Calculate the canvas position at which a chat bubble should be rendered.
+///
+/// * Vertical: if the bubble would be above `canvas_h`, flip it below the boat.
+/// * Horizontal: clamp `bx` so the text stays within `[0, canvas_w - text_len]`.
+pub(crate) fn bubble_render_pos(
+    bx: f64,
+    by: f64,
+    text_len: usize,
+    canvas_w: f64,
+    canvas_h: f64,
+) -> (f64, f64) {
+    let render_y = if by + BUBBLE_OFFSET as f64 > canvas_h {
+        by - BUBBLE_OFFSET as f64
+    } else {
+        by + BUBBLE_OFFSET as f64
+    };
+    let render_x = bx.clamp(0.0, (canvas_w - text_len as f64).max(0.0));
+    (render_x, render_y)
+}
+
 fn draw_bubbles(
     ctx: &mut Context,
     app: &App,
@@ -511,12 +531,8 @@ fn draw_bubbles(
         };
         let bubble_text = format!("[ {} ]", bubble.text);
         let bubble_text_len = bubble_text.len();
-        let render_y = if by + BUBBLE_OFFSET as f64 > canvas_h {
-            by - BUBBLE_OFFSET as f64
-        } else {
-            by + BUBBLE_OFFSET as f64
-        };
-        let render_x = bx.clamp(0.0, (canvas_w - bubble_text_len as f64).max(0.0));
+        let (render_x, render_y) =
+            bubble_render_pos(bx, by, bubble_text_len, canvas_w, canvas_h);
         ctx.print(render_x, render_y, Span::styled(bubble_text, Style::new().fg(color)));
     }
 }
@@ -612,5 +628,62 @@ mod tests {
         // All four cardinal neighbors → "+"
         let app = app_with_coast_and_neighbors(&[(0, -1), (0, 1), (-1, 0), (1, 0)]);
         assert_eq!(coast_char(&app, 5, 5), "+");
+    }
+
+    // ── bubble_render_pos tests ───────────────────────────────────────────────
+
+    #[test]
+    fn bubble_normal_position() {
+        // Bubble in the middle of the canvas: Y goes above (normal), X unchanged.
+        let offset = BUBBLE_OFFSET as f64;
+        let (rx, ry) = bubble_render_pos(10.0, 20.0, 5, 80.0, 50.0);
+        assert_eq!(rx, 10.0);
+        assert_eq!(ry, 20.0 + offset);
+    }
+
+    #[test]
+    fn bubble_near_top_flips_below() {
+        // by is so close to canvas_h that by + BUBBLE_OFFSET > canvas_h → flip below.
+        let offset = BUBBLE_OFFSET as f64;
+        let canvas_h = 50.0_f64;
+        let by = canvas_h - 1.0; // adding offset would exceed canvas_h
+        let (_, ry) = bubble_render_pos(10.0, by, 5, 80.0, canvas_h);
+        assert_eq!(ry, by - offset);
+    }
+
+    #[test]
+    fn bubble_clamps_left_edge() {
+        // bx is negative → clamped to 0.0.
+        let (rx, _) = bubble_render_pos(-5.0, 20.0, 5, 80.0, 50.0);
+        assert_eq!(rx, 0.0);
+    }
+
+    #[test]
+    fn bubble_clamps_right_edge() {
+        // bx is so far right that text would overflow → clamped left.
+        let canvas_w = 80.0_f64;
+        let text_len = 10_usize;
+        let bx = 75.0; // 75 + 10 = 85 > 80
+        let (rx, _) = bubble_render_pos(bx, 20.0, text_len, canvas_w, 50.0);
+        assert_eq!(rx, canvas_w - text_len as f64); // 70.0
+    }
+
+    #[test]
+    fn bubble_exact_top_boundary() {
+        // by + BUBBLE_OFFSET == canvas_h exactly → should NOT flip (only flips when strictly greater).
+        let offset = BUBBLE_OFFSET as f64;
+        let canvas_h = 50.0_f64;
+        let by = canvas_h - offset; // by + offset == canvas_h exactly
+        let (_, ry) = bubble_render_pos(10.0, by, 5, 80.0, canvas_h);
+        assert_eq!(ry, by + offset); // no flip
+    }
+
+    #[test]
+    fn bubble_short_canvas_x_clamped_to_zero() {
+        // Canvas narrower than text → max(0.0, canvas_w - text_len) == 0 → render_x == 0.0.
+        let canvas_w = 5.0_f64;
+        let text_len = 10_usize; // longer than canvas
+        let (rx, _) = bubble_render_pos(3.0, 20.0, text_len, canvas_w, 50.0);
+        assert_eq!(rx, 0.0);
     }
 }

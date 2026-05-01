@@ -218,23 +218,18 @@ pub async fn handle(
                                     metrics::MOVES_TOTAL.inc();
 
                                     // Check if the player is within 15 tiles of the current target anchor.
-                                    if let Some(target) = anchor_points.get(next_anchor_idx) {
-                                        let dx = target.position.x - position.x;
-                                        let dy = target.position.y - position.y;
-                                        if dx.hypot(dy) <= 15.0 {
-                                            let reached_id = target.id;
-                                            next_anchor_idx += 1;
-                                            send_event(
-                                                &mut ws,
-                                                &GameEvent::NewAnchorEvent {
-                                                    visited_id: Some(reached_id),
-                                                    next: anchor_points
-                                                        .get(next_anchor_idx)
-                                                        .cloned(),
-                                                },
-                                            )
-                                            .await?;
-                                        }
+                                    if let Some((reached_id, new_idx)) = anchor_reached(&position, &anchor_points, next_anchor_idx) {
+                                        next_anchor_idx = new_idx;
+                                        send_event(
+                                            &mut ws,
+                                            &GameEvent::NewAnchorEvent {
+                                                visited_id: Some(reached_id),
+                                                next: anchor_points
+                                                    .get(next_anchor_idx)
+                                                    .cloned(),
+                                            },
+                                        )
+                                        .await?;
                                     }
 
                                     GameEvent::MoveEvent { id: self_id, position }
@@ -305,4 +300,94 @@ pub async fn handle(
     });
 
     loop_result
+}
+
+// ── Anchor proximity helper ───────────────────────────────────────────────────
+
+/// Returns `Some((reached_id, new_next_idx))` if the player's `position` is
+/// within 15 tiles of `anchor_points[next_idx]`, otherwise `None`.
+pub(crate) fn anchor_reached(
+    position: &Position,
+    anchor_points: &[AnchorPoint],
+    next_idx: usize,
+) -> Option<(u32, usize)> {
+    let target = anchor_points.get(next_idx)?;
+    let dx = target.position.x - position.x;
+    let dy = target.position.y - position.y;
+    if dx.hypot(dy) <= 15.0 {
+        Some((target.id, next_idx + 1))
+    } else {
+        None
+    }
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use black_sea_protocol::{AnchorPoint, Position};
+
+    fn make_anchor(id: u32, x: f32, y: f32) -> AnchorPoint {
+        AnchorPoint {
+            id,
+            name: format!("Anchor{id}"),
+            position: Position { x, y },
+            note: None,
+        }
+    }
+
+    #[test]
+    fn anchor_reached_within_range() {
+        // distance ≈ 7.07 ≤ 15
+        let anchors = vec![make_anchor(42, 105.0, 105.0)];
+        let pos = Position { x: 100.0, y: 100.0 };
+        let result = anchor_reached(&pos, &anchors, 0);
+        assert_eq!(result, Some((42, 1)));
+    }
+
+    #[test]
+    fn anchor_reached_exactly_15() {
+        // distance == 15.0 exactly — boundary inclusive
+        let anchors = vec![make_anchor(1, 115.0, 100.0)];
+        let pos = Position { x: 100.0, y: 100.0 };
+        let result = anchor_reached(&pos, &anchors, 0);
+        assert_eq!(result, Some((1, 1)));
+    }
+
+    #[test]
+    fn anchor_reached_just_outside() {
+        // Use a point that is 15.01 tiles away along the x-axis
+        let anchors = vec![make_anchor(2, 115.01, 100.0)];
+        let pos = Position { x: 100.0, y: 100.0 };
+        let result = anchor_reached(&pos, &anchors, 0);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn anchor_reached_empty_list() {
+        let anchors: Vec<AnchorPoint> = vec![];
+        let pos = Position { x: 100.0, y: 100.0 };
+        assert!(anchor_reached(&pos, &anchors, 0).is_none());
+    }
+
+    #[test]
+    fn anchor_reached_idx_past_end() {
+        let anchors = vec![make_anchor(3, 100.0, 100.0)];
+        let pos = Position { x: 100.0, y: 100.0 };
+        // next_idx == 1, but anchors.len() == 1
+        assert!(anchor_reached(&pos, &anchors, 1).is_none());
+    }
+
+    #[test]
+    fn anchor_reached_advances_index() {
+        let anchors = vec![
+            make_anchor(10, 100.0, 100.0),
+            make_anchor(11, 200.0, 200.0),
+        ];
+        let pos = Position { x: 100.0, y: 100.0 };
+        // Near anchor[0]; returned new_idx should be 1
+        let result = anchor_reached(&pos, &anchors, 0);
+        assert_eq!(result, Some((10, 1)));
+    }
 }

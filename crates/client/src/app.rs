@@ -707,4 +707,144 @@ mod tests {
         assert_eq!(app.bubbles.len(), 1);
         assert_eq!(app.bubbles[0].text, "fresh");
     }
+
+    // ── NewAnchorEvent helpers ─────────────────────────────────────────────────
+
+    /// Build an App pre-loaded with one anchor (id=0, name="Alpha", at position 100,100).
+    fn app_with_anchor() -> App {
+        let mut app = App::new("test".into());
+        app.anchor_points.push(AnchorPoint {
+            id: 0,
+            name: "Alpha".into(),
+            position: Position { x: 100.0, y: 100.0 },
+            note: None,
+        });
+        app
+    }
+
+    // ── NewAnchorEvent tests ───────────────────────────────────────────────────
+
+    #[test]
+    fn new_anchor_event_visited_id_marks_anchor_visited() {
+        let mut app = app_with_anchor();
+        handle_server_event(
+            &mut app,
+            GameEvent::NewAnchorEvent {
+                visited_id: Some(0),
+                next: None,
+            },
+        );
+        assert!(app.visited_anchors.contains(&0));
+    }
+
+    #[test]
+    fn new_anchor_event_visited_id_pushes_bubble() {
+        let mut app = app_with_anchor();
+        handle_server_event(
+            &mut app,
+            GameEvent::NewAnchorEvent {
+                visited_id: Some(0),
+                next: None,
+            },
+        );
+        assert_eq!(app.bubbles.len(), 1);
+        assert!(
+            app.bubbles[0].text.contains("Alpha"),
+            "bubble should mention the anchor name 'Alpha'"
+        );
+    }
+
+    #[test]
+    fn new_anchor_event_next_appends_to_anchor_points() {
+        let mut app = App::new("test".into());
+        let new_anchor = AnchorPoint {
+            id: 5,
+            name: "Beta".into(),
+            position: Position { x: 50.0, y: 50.0 },
+            note: None,
+        };
+        handle_server_event(
+            &mut app,
+            GameEvent::NewAnchorEvent {
+                visited_id: None,
+                next: Some(new_anchor),
+            },
+        );
+        assert!(app.anchor_points.iter().any(|a| a.id == 5));
+    }
+
+    #[test]
+    fn new_anchor_event_next_not_duplicated() {
+        let mut app = App::new("test".into());
+        let new_anchor = AnchorPoint {
+            id: 5,
+            name: "Beta".into(),
+            position: Position { x: 50.0, y: 50.0 },
+            note: None,
+        };
+        // Send the same anchor twice.
+        handle_server_event(
+            &mut app,
+            GameEvent::NewAnchorEvent {
+                visited_id: None,
+                next: Some(new_anchor.clone()),
+            },
+        );
+        handle_server_event(
+            &mut app,
+            GameEvent::NewAnchorEvent {
+                visited_id: None,
+                next: Some(new_anchor),
+            },
+        );
+        assert_eq!(app.anchor_points.len(), 1, "duplicate anchor should not be inserted");
+    }
+
+    #[test]
+    fn new_anchor_event_unknown_visited_id_no_bubble() {
+        let mut app = App::new("test".into());
+        // No anchors loaded — id 99 is unknown.
+        handle_server_event(
+            &mut app,
+            GameEvent::NewAnchorEvent {
+                visited_id: Some(99),
+                next: None,
+            },
+        );
+        assert!(app.bubbles.is_empty(), "no name found, so no bubble should be pushed");
+    }
+
+    #[test]
+    fn new_anchor_event_none_visited_none_next_is_noop() {
+        let mut app = app_with_anchor();
+        let initial_anchor_count = app.anchor_points.len();
+        handle_server_event(
+            &mut app,
+            GameEvent::NewAnchorEvent {
+                visited_id: None,
+                next: None,
+            },
+        );
+        assert!(app.visited_anchors.is_empty());
+        assert!(app.bubbles.is_empty());
+        assert_eq!(app.anchor_points.len(), initial_anchor_count);
+    }
+
+    #[test]
+    fn anchor_points_event_is_noop() {
+        let mut app = App::new("test".into());
+        let some_anchor = AnchorPoint {
+            id: 7,
+            name: "Gamma".into(),
+            position: Position { x: 10.0, y: 10.0 },
+            note: None,
+        };
+        handle_server_event(
+            &mut app,
+            GameEvent::AnchorPointsEvent {
+                points: vec![some_anchor],
+            },
+        );
+        assert!(app.anchor_points.is_empty(), "AnchorPointsEvent should be a no-op");
+    }
 }
