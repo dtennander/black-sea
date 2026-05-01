@@ -155,9 +155,30 @@ pub async fn handle_key(
         return Ok(false);
     }
 
-    // While the map overview is open, any key closes it.
     if app.show_map_overview {
-        app.show_map_overview = false;
+        match key.code {
+            KeyCode::Esc => {
+                app.show_map_overview = false;
+                app.selected_anchor_idx = None;
+            }
+            KeyCode::Left => {
+                if !app.anchor_points.is_empty() {
+                    app.selected_anchor_idx = Some(match app.selected_anchor_idx {
+                        None | Some(0) => app.anchor_points.len() - 1,
+                        Some(i) => i - 1,
+                    });
+                }
+            }
+            KeyCode::Right => {
+                if !app.anchor_points.is_empty() {
+                    app.selected_anchor_idx = Some(match app.selected_anchor_idx {
+                        None => 0,
+                        Some(i) => (i + 1) % app.anchor_points.len(),
+                    });
+                }
+            }
+            _ => {}
+        }
         return Ok(false);
     }
 
@@ -193,6 +214,7 @@ pub async fn handle_key(
                 let text: String = app.input.drain(..).collect();
                 if text == "/map" {
                     app.show_map_overview = true;
+                    app.selected_anchor_idx = app.nearest_anchor_idx();
                 } else {
                     send_event(ws, &GameEvent::SayEvent { position: None, text: text.clone() })
                         .await?;

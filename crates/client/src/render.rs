@@ -7,6 +7,8 @@ use ratatui::widgets::Block;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::canvas::{Canvas, Context};
 
+use black_sea_protocol::AnchorPoint;
+
 use crate::app::{
     App, BUBBLE_OFFSET, BUBBLE_TTL, Direction, PAGE_TILES_H, PAGE_TILES_W, UpdateStatus,
 };
@@ -187,6 +189,7 @@ fn render_world(frame: &mut Frame, app: &App, world_area: ratatui::layout::Rect)
         .y_bounds([0.0, canvas_h])
         .paint(move |ctx: &mut Context| {
             draw_coastline(ctx, app, page_ox, page_oy, canvas_h);
+            draw_anchor_points(ctx, app, &world_to_canvas);
             draw_remote_boats(
                 ctx,
                 app,
@@ -231,6 +234,22 @@ fn draw_coastline(ctx: &mut Context, app: &App, page_ox: u32, page_oy: u32, canv
                 ctx.print(cx, cy, Span::styled(ch, Style::new().fg(Color::Green)));
             }
         }
+    }
+}
+
+fn draw_anchor_points(
+    ctx: &mut Context,
+    app: &App,
+    world_to_canvas: &impl Fn(f32, f32) -> (f64, f64),
+) {
+    for anchor in &app.anchor_points {
+        let (cx, cy) = world_to_canvas(anchor.position.x, anchor.position.y);
+        let color = if app.visited_anchors.contains(&anchor.id) {
+            Color::Green
+        } else {
+            Color::Magenta
+        };
+        ctx.print(cx, cy, Span::styled("*", Style::new().fg(color)));
     }
 }
 
@@ -340,16 +359,18 @@ fn render_map_overview(frame: &mut Frame, app: &App) {
     let ov_w = overview.width as f64;
     let ov_h = overview.height as f64;
 
-    // Map the player's world position into overview coordinates.
     let (world_w, world_h) = match &app.world_info {
         Some(wi) => (wi.tile_width as f64, wi.tile_height as f64),
         None => return,
     };
 
     let title = format!(
-        "Map Overview  [{}, {}]  (Esc to close)",
+        "Map Overview  [{}, {}]  (← → ankarpunkter, Esc stäng)",
         app.cursor.x as u32, app.cursor.y as u32,
     );
+
+    let [canvas_area, info_area] =
+        Layout::vertical([Constraint::Min(0), Constraint::Length(3)]).areas(frame.area());
 
     let canvas = Canvas::default()
         .block(Block::bordered().title(title))
@@ -357,10 +378,30 @@ fn render_map_overview(frame: &mut Frame, app: &App) {
         .y_bounds([0.0, ov_h])
         .paint(|ctx: &mut Context| {
             draw_overview_terrain(ctx, overview);
+            draw_overview_anchors(ctx, app, ov_w, ov_h, world_w, world_h);
             draw_overview_player(ctx, app, ov_w, ov_h, world_w, world_h);
         });
 
-    frame.render_widget(canvas, frame.area());
+    frame.render_widget(canvas, canvas_area);
+
+    let selected: Option<&AnchorPoint> =
+        app.selected_anchor_idx.and_then(|i| app.anchor_points.get(i));
+    let info_widget = match selected {
+        Some(anchor) => {
+            let note = anchor.note.as_deref().unwrap_or("");
+            Paragraph::new(Line::from(Span::styled(
+                format!("  {}", note),
+                Style::new().fg(Color::White),
+            )))
+            .block(Block::bordered().title(anchor.name.clone()))
+        }
+        None => Paragraph::new(Line::from(Span::styled(
+            "  Inga ankarpunkter",
+            Style::new().fg(Color::DarkGray),
+        )))
+        .block(Block::bordered().title("Ankarpunkt")),
+    };
+    frame.render_widget(info_widget, info_area);
 }
 
 fn draw_overview_terrain(ctx: &mut Context, overview: &crate::app::OverviewMap) {
@@ -415,6 +456,40 @@ fn draw_overview_player(
             Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD),
         ),
     );
+}
+
+fn draw_overview_anchors(
+    ctx: &mut Context,
+    app: &App,
+    ov_w: f64,
+    ov_h: f64,
+    world_w: f64,
+    world_h: f64,
+) {
+    for (i, anchor) in app.anchor_points.iter().enumerate() {
+        let ox = (anchor.position.x as f64 / world_w) * ov_w;
+        let oy = (anchor.position.y as f64 / world_h) * ov_h;
+        let canvas_y = ov_h - 1.0 - oy;
+
+        let is_selected = app.selected_anchor_idx == Some(i);
+        let is_visited = app.visited_anchors.contains(&anchor.id);
+
+        if is_selected {
+            ctx.print(
+                ox,
+                canvas_y + 1.0,
+                Span::styled("^", Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            );
+            ctx.print(
+                ox,
+                canvas_y,
+                Span::styled("*", Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            );
+        } else {
+            let color = if is_visited { Color::Green } else { Color::Cyan };
+            ctx.print(ox, canvas_y, Span::styled("*", Style::new().fg(color)));
+        }
+    }
 }
 
 // ── Chat bubbles ─────────────────────────────────────────────────────────────
