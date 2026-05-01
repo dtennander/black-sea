@@ -4,5 +4,6 @@ members = [
     "crates/map-loader",
     "crates/server",
     "crates/client",
+    "crates/admin-tool",
 ]
 resolver = "2"

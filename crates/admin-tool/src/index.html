@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Black Sea — Anchor Editor</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #map { height: 100%; width: 100%; }
+
+    #panel {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: rgba(30, 30, 40, 0.92);
+      color: #e8e8f0;
+      border-radius: 8px;
+      padding: 14px 18px;
+      min-width: 200px;
+      font-family: system-ui, sans-serif;
+      font-size: 14px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+    }
+    #panel h2 { font-size: 15px; margin-bottom: 10px; color: #a0c4ff; }
+    #panel p { font-size: 12px; color: #aaa; margin-bottom: 12px; }
+    #save-btn {
+      width: 100%;
+      padding: 8px;
+      background: #3a7bd5;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    #save-btn:hover { background: #2f65b8; }
+    #status {
+      margin-top: 8px;
+      font-size: 12px;
+      min-height: 18px;
+      color: #aaa;
+    }
+    #status.ok { color: #7ddc7d; }
+    #status.err { color: #ff7575; }
+    #count { margin-top: 6px; font-size: 12px; color: #aaa; }
+
+    .popup-form { font-family: system-ui, sans-serif; font-size: 13px; }
+    .popup-form label { display: block; margin-bottom: 4px; color: #444; }
+    .popup-form input {
+      width: 160px;
+      padding: 4px 6px;
+      margin-bottom: 6px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .popup-form .coords { font-size: 11px; color: #888; margin-bottom: 6px; }
+    .popup-form button {
+      padding: 5px 12px;
+      background: #3a7bd5;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .popup-form button:hover { background: #2f65b8; }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<div id="panel">
+  <h2>Anchor Editor</h2>
+  <p>Click the map to place anchor points.</p>
+  <button id="save-btn">Save All</button>
+  <div id="status"></div>
+  <div id="count"></div>
+</div>
+
+<script>
+  // All coordinate conversion (lat/lon ↔ tile space) is handled server-side
+  // via black-sea-protocol. The browser only ever works with lat/lon.
+
+  // --- Map setup ---
+  const map = L.map('map').setView([59.30, 18.75], 9);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 18,
+  }).addTo(map);
+
+  // --- State ---
+  // Each anchor: { name, lat, lon, note } — tile conversion done server-side.
+  // Loaded anchors from CSV have x/y; we convert to lat/lon for display.
+  let anchors = [];
+
+  function updateCount() {
+    document.getElementById('count').textContent = `${anchors.length} anchor${anchors.length !== 1 ? 's' : ''}`;
+  }
+
+  function addMarker(anchor) {
+    const marker = L.marker([anchor.lat, anchor.lon]).addTo(map);
+    marker.bindPopup(`
+      <strong>${anchor.name}</strong><br/>
+      ${anchor.note ? `Note: ${anchor.note}` : ''}
+    `);
+    anchor._marker = marker;
+  }
+
+  // --- Load existing anchors ---
+  fetch('/api/anchors')
+    .then(r => r.json())
+    .then(data => {
+      // Server returns {name, lat, lon, note} — no conversion needed.
+      anchors = data;
+      anchors.forEach(addMarker);
+      updateCount();
+    });
+
+  // --- Click to place ---
+  map.on('click', function(e) {
+    const { lat, lng: lon } = e.latlng;
+
+    const container = document.createElement('div');
+    container.className = 'popup-form';
+    container.innerHTML = `
+      <div class="coords">Lat: ${lat.toFixed(5)}, Lon: ${lon.toFixed(5)}</div>
+      <label>Name <input id="pop-name" type="text" placeholder="e.g. Sandhamn" /></label>
+      <label>Note <input id="pop-note" type="text" placeholder="optional" /></label>
+      <button id="pop-confirm">Add Anchor</button>
+    `;
+
+    L.popup()
+      .setLatLng(e.latlng)
+      .setContent(container)
+      .openOn(map);
+
+    setTimeout(() => {
+      const nameInput = document.getElementById('pop-name');
+      if (nameInput) nameInput.focus();
+
+      const btn = document.getElementById('pop-confirm');
+      if (btn) {
+        btn.addEventListener('click', () => {
+          const name = document.getElementById('pop-name').value.trim();
+          if (!name) { alert('Name is required.'); return; }
+          const note = document.getElementById('pop-note').value.trim();
+          const anchor = { name, lat, lon, note };
+          anchors.push(anchor);
+          addMarker(anchor);
+          updateCount();
+          map.closePopup();
+          setStatus('', '');
+        });
+      }
+    }, 0);
+  });
+
+  // --- Save All ---
+  function setStatus(msg, cls) {
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.className = cls;
+  }
+
+  document.getElementById('save-btn').addEventListener('click', () => {
+    // Send lat/lon; server converts to tile space via black-sea-protocol.
+    const payload = anchors.map(({ name, lat, lon, note }) => ({ name, lat, lon, note }));
+    fetch('/api/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then(r => {
+        if (r.ok) setStatus('Saved!', 'ok');
+        else r.text().then(t => setStatus('Error: ' + t, 'err'));
+      })
+      .catch(err => setStatus('Error: ' + err, 'err'));
+  });
+
+  updateCount();
+</script>
+</body>
+</html>
