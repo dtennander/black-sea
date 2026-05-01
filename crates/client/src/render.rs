@@ -365,7 +365,7 @@ fn render_map_overview(frame: &mut Frame, app: &App) {
     };
 
     let title = format!(
-        "Map Overview  [{}, {}]  (← → ankarpunkter, Esc stäng)",
+        "Map Overview  [{}, {}]  (← → anchor points, Esc close)",
         app.cursor.x as u32, app.cursor.y as u32,
     );
 
@@ -396,10 +396,10 @@ fn render_map_overview(frame: &mut Frame, app: &App) {
             .block(Block::bordered().title(anchor.name.clone()))
         }
         None => Paragraph::new(Line::from(Span::styled(
-            "  Inga ankarpunkter",
+            "  No anchor points",
             Style::new().fg(Color::DarkGray),
         )))
-        .block(Block::bordered().title("Ankarpunkt")),
+        .block(Block::bordered().title("Anchor point")),
     };
     frame.render_widget(info_widget, info_area);
 }
