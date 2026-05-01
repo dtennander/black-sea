@@ -31,9 +31,10 @@ where
             None => return Ok(None),
             Some(Err(e)) => return Err(e).context("WebSocket receive error"),
             Some(Ok(Message::Binary(payload))) => {
-                let event: GameEvent =
-                    bincode::deserialize(&payload).context("failed to deserialize event")?;
-                return Ok(Some(event));
+                match bincode::deserialize(&payload) {
+                    Ok(event) => return Ok(Some(event)),
+                    Err(_) => continue, // unknown/future variant — skip silently
+                }
             }
             Some(Ok(Message::Close(_))) => return Ok(None),
             Some(Ok(_)) => continue, // skip Ping, Pong, Text

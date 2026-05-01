@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::Result;
-use black_sea_protocol::{GameEvent, MapGrid, Position, Tile, recv_event, send_event};
+use black_sea_protocol::{AnchorPoint, GameEvent, MapGrid, Position, Tile, recv_event, send_event};
 use tokio::net::TcpStream;
 use tokio::sync::broadcast;
 use tokio_tungstenite::WebSocketStream;
@@ -57,6 +57,7 @@ pub async fn handle(
     boats: BoatMap,
     map: Arc<MapGrid>,
     overview: Arc<OverviewData>,
+    anchor_points: Arc<Vec<AnchorPoint>>,
     metres_per_tile: f32,
 ) -> Result<()> {
     let self_id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
@@ -141,6 +142,15 @@ pub async fn handle(
     )
     .await?;
 
+    send_event(
+        &mut ws,
+        &GameEvent::NewAnchorEvent {
+            visited_id: None,
+            next: anchor_points.first().cloned(),
+        },
+    )
+    .await?;
+
     let snapshot: Vec<(u64, Position, String)> = boats
         .lock()
         .unwrap()
@@ -159,6 +169,8 @@ pub async fn handle(
     });
 
     println!("Client {self_id} registered as '{name}'");
+
+    let mut next_anchor_idx: usize = 0;
 
     // ── Main event loop ───────────────────────────────────────────────────────
     let loop_result: Result<()> = async {
@@ -225,7 +237,8 @@ pub async fn handle(
                                 | GameEvent::ByeEvent { .. }
                                 | GameEvent::MapChunkResponse { .. }
                                 | GameEvent::OverviewMapEvent { .. }
-                                | GameEvent::AnchorPointsEvent { .. } => continue,
+                                | GameEvent::AnchorPointsEvent { .. }
+                                | GameEvent::NewAnchorEvent { .. } => continue,
                             };
 
                             let _ = tx.send(Envelope {

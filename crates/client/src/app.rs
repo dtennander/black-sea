@@ -135,8 +135,7 @@ impl App {
             update_status: UpdateStatus::Unknown,
             overview: None,
             show_map_overview: false,
-            anchor_points: vec![
-            ],
+            anchor_points: Vec::new(),
             visited_anchors: HashSet::new(),
             selected_anchor_idx: None,
         }
