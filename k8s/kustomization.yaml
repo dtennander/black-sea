@@ -11,4 +11,4 @@ resources:
 images:
   - name: ghcr.io/dtennander/black-sea
     newName: ghcr.io/dtennander/black-sea
-    newTag: 0b646b9
+    newTag: 8a6f9b4
