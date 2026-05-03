@@ -4,6 +4,7 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingress.yaml
+  - admin-ingress.yaml
   - pvc.yaml
   - servicemonitor.yaml
   - grafana-dashboard.yaml

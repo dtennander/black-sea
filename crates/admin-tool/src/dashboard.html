@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Black Sea — Admin</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #e8e8f0; margin: 0; padding: 32px; }
+    h1 { color: #a0c4ff; margin-bottom: 8px; }
+    h2 { color: #a0c4ff; margin: 24px 0 8px; }
+    .stats { display: flex; gap: 24px; margin-bottom: 8px; }
+    .stat { background: rgba(255,255,255,0.06); border-radius: 8px; padding: 16px 24px; text-align: center; }
+    .stat .value { font-size: 2rem; font-weight: bold; color: #7ddc7d; }
+    .stat .label { font-size: 0.85rem; color: #aaa; margin-top: 4px; }
+    a.btn { display: inline-block; margin-top: 16px; padding: 10px 20px; background: #3a7bd5;
+             color: white; border-radius: 6px; text-decoration: none; font-size: 14px; }
+    a.btn:hover { background: #2f65b8; }
+    table { border-collapse: collapse; width: 100%; max-width: 700px; }
+    th, td { border: 1px solid rgba(255,255,255,0.12); padding: 8px 12px; text-align: left; font-size: 13px; }
+    th { background: rgba(255,255,255,0.08); color: #a0c4ff; }
+    tr:hover td { background: rgba(255,255,255,0.04); }
+  </style>
+</head>
+<body>
+  <h1>Black Sea — Back-Office Dashboard</h1>
+
+  <h2>Live Stats</h2>
+  <div class="stats">
+    <div class="stat"><div class="value">{ACTIVE}</div><div class="label">Active connections</div></div>
+    <div class="stat"><div class="value">{TOTAL}</div><div class="label">Total connections (all-time)</div></div>
+    <div class="stat"><div class="value">{ANCHOR_COUNT}</div><div class="label">Anchor points</div></div>
+  </div>
+
+  <a class="btn" href="{PREFIX}/editor">Open Anchor Editor</a>
+
+  <h2>Anchor Points</h2>
+  <table>
+    <thead><tr><th>Name</th><th>X (tile)</th><th>Y (tile)</th><th>Note</th></tr></thead>
+    <tbody>{ANCHOR_ROWS}</tbody>
+  </table>
+</body>
+</html>

@@ -3,6 +3,10 @@ name = "black-sea-admin-tool"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "black_sea_admin_tool"
+path = "src/lib.rs"
+
 [[bin]]
 name = "admin-tool"
 path = "src/main.rs"

@@ -10,6 +10,7 @@ path = "src/main.rs"
 [dependencies]
 black-sea-protocol = { path = "../protocol" }
 black-sea-map-loader = { path = "../map-loader" }
+black-sea-admin-tool = { path = "../admin-tool" }
 tokio = { version = "1.50.0", features = ["full"] }
 tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
 anyhow = "1.0.102"

@@ -308,6 +308,7 @@ name = "black-sea-server"
 version = "0.1.1"
 dependencies = [
  "anyhow",
+ "black-sea-admin-tool",
  "black-sea-map-loader",
  "black-sea-protocol",
  "csv",

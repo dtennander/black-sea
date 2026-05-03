@@ -3,6 +3,7 @@ mod metrics;
 mod spawn;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
@@ -65,6 +66,34 @@ async fn main() -> Result<()> {
         map_grid.width, map_grid.height, map_grid.chunk_size
     );
 
+    metrics::init();
+    tokio::spawn(async {
+        if let Err(e) = metrics::serve_metrics("0.0.0.0:9090").await {
+            eprintln!("[metrics] Server error: {e}");
+        }
+    });
+
+    let csv_path = std::env::var("ANCHORINGS_CSV").unwrap_or_else(|_| "anchorings.csv".to_string());
+    let anchor_points: Arc<Vec<AnchorPoint>> = Arc::new(load_anchor_points(&csv_path));
+
+    tokio::spawn(async move {
+        let admin_csv = PathBuf::from(&csv_path);
+        let admin_stats = black_sea_admin_tool::Stats {
+            active_connections: Arc::new(|| metrics::ACTIVE_CONNECTIONS.get()),
+            total_connections: Arc::new(|| metrics::TOTAL_CONNECTIONS.get()),
+        };
+        if let Err(e) =
+            black_sea_admin_tool::serve("0.0.0.0:8080", admin_csv, admin_stats, "/admin").await
+        {
+            eprintln!("[admin] Server error: {e}");
+        }
+    });
+
+    let listener = TcpListener::bind("0.0.0.0:7456").await?;
+    let (tx, _) = broadcast::channel::<Envelope>(64);
+    let boats: BoatMap = Arc::new(Mutex::new(HashMap::new()));
+    println!("Running Server");
+
     let overview: Arc<OverviewData> = Arc::new(OverviewData {
         width: overview_grid.width,
         height: overview_grid.height,
@@ -73,20 +102,6 @@ async fn main() -> Result<()> {
             .into_iter()
             .flatten()
             .collect::<Vec<Tile>>(),
-    });
-
-    let anchor_points: Arc<Vec<AnchorPoint>> = Arc::new(load_anchor_points("anchorings.csv"));
-
-    let listener = TcpListener::bind("0.0.0.0:7456").await?;
-    let (tx, _) = broadcast::channel::<Envelope>(64);
-    let boats: BoatMap = Arc::new(Mutex::new(HashMap::new()));
-    println!("Running Server");
-
-    metrics::init();
-    tokio::spawn(async {
-        if let Err(e) = metrics::serve_metrics("0.0.0.0:9090").await {
-            eprintln!("[metrics] Server error: {e}");
-        }
     });
 
     loop {

@@ -25,14 +25,18 @@ spec:
           ports:
             - containerPort: 7456
               name: websocket
+            - containerPort: 8080
+              name: admin
             - containerPort: 9090
               name: metrics
           env:
             - name: BLACK_SEA_CACHE_DIR
               value: /data/osm-cache
+            - name: ANCHORINGS_CSV
+              value: /data/anchorings.csv
           volumeMounts:
             - name: osm-cache
-              mountPath: /data/osm-cache
+              mountPath: /data
       volumes:
         - name: osm-cache
           persistentVolumeClaim:

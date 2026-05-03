@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: black-sea-admin-ingress
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt"
+    nginx.ingress.kubernetes.io/auth-url: "https://auth.cluster.tennander.se/outpost.goauthentik.io/auth/nginx/"
+    nginx.ingress.kubernetes.io/auth-signin: "https://auth.cluster.tennander.se/outpost.goauthentik.io/start?rd=$escaped_request_uri"
+    nginx.ingress.kubernetes.io/auth-response-headers: "Set-Cookie,X-authentik-username,X-authentik-groups,X-authentik-email,X-authentik-name,X-authentik-uid"
+    nginx.ingress.kubernetes.io/auth-snippet: |
+      proxy_set_header X-Original-URL $scheme://$http_host$request_uri;
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - world.black-sea.tennander.se
+      secretName: black-sea-tls
+  rules:
+    - host: world.black-sea.tennander.se
+      http:
+        paths:
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: black-sea-service
+                port:
+                  number: 8080

@@ -8,4 +8,5 @@ RUN CLIENT_VERSION=${CLIENT_VERSION} cargo build --release --bin server
 FROM alpine:latest
 COPY --from=builder /app/target/release/server /server
 EXPOSE 7456
+EXPOSE 8080
 CMD ["/server"]
