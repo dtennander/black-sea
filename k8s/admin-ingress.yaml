@@ -11,10 +11,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - world.black-sea.tennander.se
-      secretName: black-sea-tls
+        - black-sea.tennander.se
+      secretName: black-sea-tls-2
   rules:
-    - host: world.black-sea.tennander.se
+    - host: black-sea.tennander.se
       http:
         paths:
           - path: /admin
