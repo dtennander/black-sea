@@ -2,6 +2,8 @@
 
 A terminal multiplayer sailing game set in the Stockholm archipelago. Navigate your boat through real GIS coastline data, explore islands, and chat with other sailors.
 
+![Black Sea demo](screenshots/demo.gif)
+
 ## Install
 
 **macOS via Homebrew:**
