@@ -4,38 +4,172 @@
   <meta charset="UTF-8"/>
   <title>Black Sea — Admin</title>
   <style>
-    body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #e8e8f0; margin: 0; padding: 32px; }
-    h1 { color: #a0c4ff; margin-bottom: 8px; }
-    h2 { color: #a0c4ff; margin: 24px 0 8px; }
-    .stats { display: flex; gap: 24px; margin-bottom: 8px; }
-    .stat { background: rgba(255,255,255,0.06); border-radius: 8px; padding: 16px 24px; text-align: center; }
-    .stat .value { font-size: 2rem; font-weight: bold; color: #7ddc7d; }
-    .stat .label { font-size: 0.85rem; color: #aaa; margin-top: 4px; }
-    a.btn { display: inline-block; margin-top: 16px; padding: 10px 20px; background: #3a7bd5;
-             color: white; border-radius: 6px; text-decoration: none; font-size: 14px; }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #1a1a2e;
+      color: #e8e8f0;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+    }
+
+    /* Nav bar */
+    nav {
+      background: rgba(255,255,255,0.04);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding: 0 32px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    nav .brand {
+      font-weight: 600;
+      font-size: 15px;
+      color: #a0c4ff;
+      letter-spacing: 0.02em;
+    }
+    nav .sep { color: rgba(255,255,255,0.2); }
+    nav .page { font-size: 14px; color: rgba(255,255,255,0.5); }
+
+    main {
+      padding: 36px 32px;
+      max-width: 900px;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #e8e8f0;
+      margin: 0 0 4px;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: rgba(255,255,255,0.4);
+      margin: 0 0 28px;
+    }
+
+    /* Section label */
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.35);
+      margin: 0 0 10px;
+    }
+
+    /* Stats */
+    .stats {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+    .stat {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 18px 28px;
+      text-align: center;
+      min-width: 140px;
+    }
+    .stat .value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #7ddc7d;
+      line-height: 1;
+    }
+    .stat .label {
+      font-size: 12px;
+      color: rgba(255,255,255,0.45);
+      margin-top: 6px;
+    }
+
+    /* Action row */
+    .actions {
+      margin-bottom: 32px;
+    }
+    a.btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 18px;
+      background: #3a7bd5;
+      color: white;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 0.15s;
+    }
     a.btn:hover { background: #2f65b8; }
-    table { border-collapse: collapse; width: 100%; max-width: 700px; }
-    th, td { border: 1px solid rgba(255,255,255,0.12); padding: 8px 12px; text-align: left; font-size: 13px; }
-    th { background: rgba(255,255,255,0.08); color: #a0c4ff; }
-    tr:hover td { background: rgba(255,255,255,0.04); }
+
+    /* Table */
+    .table-wrap {
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    th, td {
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      padding: 10px 16px;
+      text-align: left;
+      font-size: 13px;
+    }
+    th {
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.5);
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: rgba(255,255,255,0.03); }
+    .empty-row td {
+      text-align: center;
+      color: rgba(255,255,255,0.25);
+      padding: 24px;
+      font-style: italic;
+    }
   </style>
 </head>
 <body>
-  <h1>Black Sea — Back-Office Dashboard</h1>
+  <nav>
+    <span class="brand">Black Sea</span>
+    <span class="sep">/</span>
+    <span class="page">Admin Dashboard</span>
+  </nav>
 
-  <h2>Live Stats</h2>
-  <div class="stats">
-    <div class="stat"><div class="value">{ACTIVE}</div><div class="label">Active connections</div></div>
-    <div class="stat"><div class="value">{TOTAL}</div><div class="label">Total connections (all-time)</div></div>
-    <div class="stat"><div class="value">{ANCHOR_COUNT}</div><div class="label">Anchor points</div></div>
-  </div>
+  <main>
+    <h1>Back-Office Dashboard</h1>
+    <p class="subtitle">System overview and anchor management.</p>
 
-  <a class="btn" href="{PREFIX}/editor">Open Anchor Editor</a>
+    <p class="section-label">Live Stats</p>
+    <div class="stats">
+      <div class="stat"><div class="value">{ACTIVE}</div><div class="label">Active connections</div></div>
+      <div class="stat"><div class="value">{TOTAL}</div><div class="label">Total connections (all-time)</div></div>
+      <div class="stat"><div class="value">{ANCHOR_COUNT}</div><div class="label">Anchor points</div></div>
+    </div>
 
-  <h2>Anchor Points</h2>
-  <table>
-    <thead><tr><th>Name</th><th>X (tile)</th><th>Y (tile)</th><th>Note</th></tr></thead>
-    <tbody>{ANCHOR_ROWS}</tbody>
-  </table>
+    <p class="section-label">Anchor Points</p>
+    <div class="actions">
+      <a class="btn" href="{PREFIX}/editor">Open Anchor Editor →</a>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Name</th><th>X (tile)</th><th>Y (tile)</th><th>Note</th></tr>
+        </thead>
+        <tbody>{ANCHOR_ROWS}</tbody>
+      </table>
+    </div>
+  </main>
 </body>
 </html>

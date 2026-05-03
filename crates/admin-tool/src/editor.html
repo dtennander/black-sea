@@ -3,139 +3,256 @@
   <head>
     <meta charset="UTF-8" />
     <title>Black Sea — Anchor Editor</title>
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-      * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      html, body { height: 100%; width: 100%; font-family: system-ui, sans-serif; }
+
+      /* Nav bar consistent with dashboard */
+      nav {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1100;
+        background: rgba(20, 20, 35, 0.92);
+        backdrop-filter: blur(8px);
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+        height: 48px;
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        gap: 10px;
       }
-      html,
-      body,
+      nav a.back {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: rgba(255,255,255,0.5);
+        text-decoration: none;
+        font-size: 13px;
+        padding: 4px 8px;
+        border-radius: 5px;
+        transition: color 0.15s, background 0.15s;
+      }
+      nav a.back:hover { color: #e8e8f0; background: rgba(255,255,255,0.07); }
+      nav .sep { color: rgba(255,255,255,0.2); font-size: 13px; }
+      nav .page { font-size: 14px; color: #a0c4ff; font-weight: 600; }
+
       #map {
-        height: 100%;
-        width: 100%;
+        position: absolute;
+        top: 48px;
+        left: 0;
+        right: 0;
+        bottom: 0;
       }
 
+      /* Side panel */
       #panel {
         position: absolute;
-        top: 10px;
-        right: 10px;
+        top: 60px;
+        right: 12px;
         z-index: 1000;
-        background: rgba(30, 30, 40, 0.92);
+        background: rgba(22, 22, 38, 0.95);
+        backdrop-filter: blur(8px);
         color: #e8e8f0;
-        border-radius: 8px;
-        padding: 14px 18px;
-        min-width: 200px;
-        font-family: system-ui, sans-serif;
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px;
+        padding: 16px;
+        width: 220px;
         font-size: 14px;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
       }
       #panel h2 {
-        font-size: 15px;
-        margin-bottom: 10px;
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 6px;
         color: #a0c4ff;
+        letter-spacing: 0.01em;
       }
       #panel p {
         font-size: 12px;
-        color: #aaa;
-        margin-bottom: 12px;
+        color: rgba(255,255,255,0.4);
+        margin-bottom: 14px;
+        line-height: 1.5;
       }
       #save-btn {
         width: 100%;
-        padding: 8px;
+        padding: 9px;
+        background: #3a7bd5;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        transition: background 0.15s;
+      }
+      #save-btn:hover { background: #2f65b8; }
+      #save-btn:active { background: #265499; }
+
+      #status {
+        margin-top: 8px;
+        font-size: 12px;
+        min-height: 18px;
+        color: rgba(255,255,255,0.4);
+        text-align: center;
+      }
+      #status.ok { color: #7ddc7d; }
+      #status.err { color: #ff7575; }
+
+      #count {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(255,255,255,0.07);
+        font-size: 12px;
+        color: rgba(255,255,255,0.35);
+        text-align: center;
+      }
+
+      /* Leaflet dark-theme overrides */
+      .leaflet-control-zoom a {
+        background: rgba(22, 22, 38, 0.92) !important;
+        color: #a0c4ff !important;
+        border-color: rgba(255,255,255,0.12) !important;
+      }
+      .leaflet-control-zoom a:hover {
+        background: rgba(40, 40, 60, 0.95) !important;
+        color: #e8e8f0 !important;
+      }
+      .leaflet-control-attribution {
+        background: rgba(22, 22, 38, 0.75) !important;
+        color: rgba(255,255,255,0.35) !important;
+      }
+      .leaflet-control-attribution a { color: rgba(255,255,255,0.5) !important; }
+
+      /* Popup form */
+      .popup-form {
+        font-family: system-ui, sans-serif;
+        font-size: 13px;
+        min-width: 180px;
+      }
+      .popup-form .coords {
+        font-size: 11px;
+        color: #666;
+        margin-bottom: 10px;
+        font-family: monospace;
+      }
+      .popup-form .field {
+        margin-bottom: 8px;
+      }
+      .popup-form label {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 3px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .popup-form input {
+        width: 100%;
+        padding: 5px 8px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        font-size: 13px;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+      .popup-form input:focus { border-color: #3a7bd5; }
+      .popup-form .btn-row {
+        display: flex;
+        gap: 6px;
+        margin-top: 10px;
+      }
+      .popup-form button.confirm {
+        flex: 1;
+        padding: 6px 10px;
         background: #3a7bd5;
         color: white;
         border: none;
         border-radius: 5px;
         cursor: pointer;
-        font-size: 14px;
-      }
-      #save-btn:hover {
-        background: #2f65b8;
-      }
-      #status {
-        margin-top: 8px;
-        font-size: 12px;
-        min-height: 18px;
-        color: #aaa;
-      }
-      #status.ok {
-        color: #7ddc7d;
-      }
-      #status.err {
-        color: #ff7575;
-      }
-      #count {
-        margin-top: 6px;
-        font-size: 12px;
-        color: #aaa;
-      }
-
-      .popup-form {
-        font-family: system-ui, sans-serif;
         font-size: 13px;
+        font-weight: 600;
       }
-      .popup-form label {
-        display: block;
-        margin-bottom: 4px;
-        color: #444;
-      }
-      .popup-form input {
-        width: 160px;
-        padding: 4px 6px;
-        margin-bottom: 6px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        font-size: 13px;
-      }
-      .popup-form .coords {
-        font-size: 11px;
+      .popup-form button.confirm:hover { background: #2f65b8; }
+      .popup-form button.cancel {
+        padding: 6px 10px;
+        background: transparent;
         color: #888;
-        margin-bottom: 6px;
-      }
-      .leaflet-popup button {
-        padding: 5px 12px;
-        background: #3a7bd5;
-        color: white;
-        border: none;
-        border-radius: 4px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
         cursor: pointer;
         font-size: 13px;
       }
-      .leaflet-popup button:hover {
-        background: #2f65b8;
+      .popup-form button.cancel:hover { background: #f5f5f5; color: #444; }
+
+      /* Anchor marker popup (view mode) */
+      .anchor-popup {
+        font-family: system-ui, sans-serif;
+        font-size: 13px;
+        min-width: 150px;
+      }
+      .anchor-popup .anchor-name {
+        font-weight: 700;
+        font-size: 14px;
+        color: #222;
+        margin-bottom: 4px;
+      }
+      .anchor-popup .anchor-note {
+        font-size: 12px;
+        color: #666;
+        margin-bottom: 10px;
+        font-style: italic;
+      }
+      .anchor-popup button.remove {
+        width: 100%;
+        padding: 5px 10px;
+        background: transparent;
+        color: #c0392b;
+        border: 1px solid #e0b4b0;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: background 0.15s, color 0.15s;
+      }
+      .anchor-popup button.remove:hover {
+        background: #c0392b;
+        color: white;
+        border-color: #c0392b;
       }
     </style>
   </head>
   <body>
+    <nav>
+      <a class="back" href="{PREFIX}/">← Dashboard</a>
+      <span class="sep">/</span>
+      <span class="page">Anchor Editor</span>
+    </nav>
+
     <div id="map"></div>
+
     <div id="panel">
       <h2>Anchor Editor</h2>
-      <p>Click the map to place anchor points.</p>
-      <button id="save-btn">Save All</button>
+      <p>Click anywhere on the map to place a new anchor point.</p>
+      <button id="save-btn">Save Anchors</button>
       <div id="status"></div>
-      <div id="count"></div>
+      <div id="count">0 anchors</div>
     </div>
 
     <script>
       // All coordinate conversion (lat/lon ↔ tile space) is handled server-side
       // via black-sea-protocol. The browser only ever works with lat/lon.
 
-      // --- Map setup ---
       const map = L.map("map").setView([59.3, 18.75], 9);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "© OpenStreetMap contributors",
         maxZoom: 18,
       }).addTo(map);
 
-      // --- State ---
-      // Each anchor: { name, lat, lon, note } — tile conversion done server-side.
-      // Loaded anchors from CSV have x/y; we convert to lat/lon for display.
       let anchors = [];
 
       function updateCount() {
@@ -144,60 +261,79 @@
       }
 
       function removePoint(name) {
-        console.log("Removing point " + name);
         const index = anchors.findIndex((a) => a.name === name);
         if (index !== -1) {
           const [old_anchor] = anchors.splice(index, 1);
           old_anchor._marker.remove();
+          updateCount();
         }
+      }
+
+      function buildAnchorPopup(anchor) {
+        const div = document.createElement("div");
+        div.className = "anchor-popup";
+        div.innerHTML = `
+          <div class="anchor-name">${anchor.name}</div>
+          ${anchor.note ? `<div class="anchor-note">${anchor.note}</div>` : ""}
+          <button class="remove">Remove anchor</button>
+        `;
+        div.querySelector("button.remove").addEventListener("click", () => {
+          removePoint(anchor.name);
+          map.closePopup();
+        });
+        return div;
       }
 
       function addMarker(anchor) {
         const marker = L.marker([anchor.lat, anchor.lon]).addTo(map);
-        marker.bindPopup(`
-      <strong>${anchor.name}</strong><br/>
-      ${anchor.note ? `Note: ${anchor.note}` : ""}
-      <button onclick="removePoint('${anchor.name}')">Remove</button>
-    `);
+        marker.bindPopup(buildAnchorPopup(anchor));
         anchor._marker = marker;
-        console.log("Added marker", anchors);
       }
 
-      // --- Load existing anchors ---
+      // Load existing anchors
       fetch("{PREFIX}/editor/api/anchors")
         .then((r) => r.json())
         .then((data) => {
-          // Server returns {name, lat, lon, note} — no conversion needed.
           anchors = data;
           anchors.forEach(addMarker);
           updateCount();
         });
 
-      // --- Click to place ---
+      // Click to place
       map.on("click", function (e) {
         const { lat, lng: lon } = e.latlng;
 
         const container = document.createElement("div");
         container.className = "popup-form";
         container.innerHTML = `
-      <div class="coords">Lat: ${lat.toFixed(5)}, Lon: ${lon.toFixed(5)}</div>
-      <label>Name <input id="pop-name" type="text" placeholder="e.g. Sandhamn" /></label>
-      <label>Note <input id="pop-note" type="text" placeholder="optional" /></label>
-      <button id="pop-confirm">Add Anchor</button>
-    `;
+          <div class="coords">${lat.toFixed(5)}, ${lon.toFixed(5)}</div>
+          <div class="field">
+            <label>Name</label>
+            <input id="pop-name" type="text" placeholder="e.g. Sandhamn" />
+          </div>
+          <div class="field">
+            <label>Note <span style="font-weight:400;color:#aaa">(optional)</span></label>
+            <input id="pop-note" type="text" placeholder="e.g. Ferry stop" />
+          </div>
+          <div class="btn-row">
+            <button class="confirm" id="pop-confirm">Add Anchor</button>
+            <button class="cancel" id="pop-cancel">Cancel</button>
+          </div>
+        `;
 
-        L.popup().setLatLng(e.latlng).setContent(container).openOn(map);
+        const popup = L.popup({ minWidth: 200 }).setLatLng(e.latlng).setContent(container).openOn(map);
 
         setTimeout(() => {
           const nameInput = document.getElementById("pop-name");
           if (nameInput) nameInput.focus();
 
-          const btn = document.getElementById("pop-confirm");
-          if (btn) {
-            btn.addEventListener("click", () => {
+          const confirmBtn = document.getElementById("pop-confirm");
+          if (confirmBtn) {
+            confirmBtn.addEventListener("click", () => {
               const name = document.getElementById("pop-name").value.trim();
               if (!name) {
-                alert("Name is required.");
+                document.getElementById("pop-name").style.borderColor = "#e74c3c";
+                document.getElementById("pop-name").focus();
                 return;
               }
               const note = document.getElementById("pop-note").value.trim();
@@ -209,10 +345,14 @@
               setStatus("", "");
             });
           }
+
+          const cancelBtn = document.getElementById("pop-cancel");
+          if (cancelBtn) {
+            cancelBtn.addEventListener("click", () => map.closePopup());
+          }
         }, 0);
       });
 
-      // --- Save All ---
       function setStatus(msg, cls) {
         const el = document.getElementById("status");
         el.textContent = msg;
@@ -220,13 +360,8 @@
       }
 
       document.getElementById("save-btn").addEventListener("click", () => {
-        // Send lat/lon; server converts to tile space via black-sea-protocol.
-        const payload = anchors.map(({ name, lat, lon, note }) => ({
-          name,
-          lat,
-          lon,
-          note,
-        }));
+        setStatus("Saving…", "");
+        const payload = anchors.map(({ name, lat, lon, note }) => ({ name, lat, lon, note }));
         fetch("{PREFIX}/editor/api/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
